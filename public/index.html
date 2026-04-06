@@ -381,7 +381,6 @@ function App() {
   }, [tasks, statuses, isAdmin, loginName]);
 
   const pct = stats.total > 0 ? Math.round((stats.done/stats.total)*100) : 0;
-  const isAdmin = role === "admin";
 
   /* ── LOGIN SCREEN ── */
   if (!role) return (
