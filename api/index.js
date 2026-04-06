@@ -278,7 +278,13 @@ app.post('/api/admin/login', async (req, res) => {
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'SEBI Compliance Dashboard API is running' });
+  const mongoConnected = mongoose.connection.readyState === 1;
+  res.json({ 
+    status: mongoConnected ? 'ok' : 'connecting',
+    message: 'SEBI Compliance Dashboard API',
+    mongoDBConnected: mongoConnected,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Export for Vercel

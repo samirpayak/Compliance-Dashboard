@@ -767,12 +767,14 @@ function App() {
       return;
     }
     
+    const hashedPwd = hashPassword(loginPassword);
+    
     // Try API first
     try {
       const response = await fetch(window.location.origin + '/api/team-members/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: loginName.trim(), password: loginPassword }),
+        body: JSON.stringify({ username: loginName.trim(), passwordHash: hashedPwd }),
         signal: AbortSignal.timeout(3000)
       });
       if (response.ok) {
@@ -788,7 +790,6 @@ function App() {
     }
     
     // Fallback to local check
-    const hashedPwd = hashPassword(loginPassword);
     if (userCredentials[loginName.trim()] === hashedPwd) {
       setRole("team");
       setLoginPassword("");
@@ -804,12 +805,14 @@ function App() {
       return;
     }
     
+    const hashedPwd = hashPassword(loginPassword);
+    
     // Try API first
     try {
       const response = await fetch(window.location.origin + '/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: loginPassword }),
+        body: JSON.stringify({ passwordHash: hashedPwd }),
         signal: AbortSignal.timeout(3000)
       });
       if (response.ok) {
@@ -825,7 +828,6 @@ function App() {
     }
     
     // Fallback to local check
-    const hashedPwd = hashPassword(loginPassword);
     if (hashedPwd === adminPassword) {
       setRole("admin");
       setLoginName("Admin");
@@ -845,12 +847,14 @@ function App() {
       return;
     }
     
+    const hashedPwd = hashPassword(newTeamMemberPassword);
+    
     // Try API first
     try {
       const response = await fetch(window.location.origin + '/api/team-members', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: newTeamMemberName.trim(), password: newTeamMemberPassword }),
+        body: JSON.stringify({ username: newTeamMemberName.trim(), passwordHash: hashedPwd }),
         signal: AbortSignal.timeout(3000)
       });
       if (response.ok) {
@@ -873,7 +877,6 @@ function App() {
     }
     
     // Fallback to local
-    const hashedPwd = hashPassword(newTeamMemberPassword);
     const ntm = [...teamMembers, newTeamMemberName.trim()];
     const nuc = {...userCredentials, [newTeamMemberName.trim()]: hashedPwd};
     setTeamMembers(ntm);
