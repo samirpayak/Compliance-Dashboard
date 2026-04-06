@@ -247,7 +247,6 @@ function App() {
   const isAdmin = role === "admin";
 
   useEffect(() => {
-  useEffect(() => {
     const d = loadStore();
     if (d) {
       setTasks(d.tasks || DEFAULT_TASKS);
