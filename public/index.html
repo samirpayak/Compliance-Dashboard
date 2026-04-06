@@ -578,33 +578,32 @@ function App() {
             <p style={{fontSize:11,color:"#64748B",margin:"0 0 12px"}}>Import multiple tasks at once using CSV or JSON format</p>
             
             <div style={{background:"#0F172A",borderRadius:10,padding:12,marginBottom:14,border:"1px solid #334155"}}>
-              <div style={{fontSize:11,fontWeight:600,color:"#E2E8F0",marginBottom:8}}>📋 Format Options:</div>
+              <div style={{fontSize:11,fontWeight:600,color:"#E2E8F0",marginBottom:8}}>📋 Format Guide:</div>
               <div style={{fontSize:10,color:"#94A3B8",lineHeight:1.6,fontFamily:"'Space Mono',monospace"}}>
-                <strong style={{color:"#CBD5E1"}}>CSV Format:</strong><br/>
-                <span style={{color:"#7DD3FC"}}>category,task,due,assignedTo</span><br/>
-                <span style={{color:"#A3E635"}}>PMS,Monthly report submission,30.04.2026,all</span><br/>
-                <span style={{color:"#A3E635"}}>AIF,NAV Disclosure,30.04.2026,john</span><br/><br/>
+                <div style={{marginBottom:8}}><strong style={{color:"#CBD5E1"}}>CSV Format:</strong> category,task,due,assignedTo</div>
+                <div style={{background:"#1E293B",padding:8,borderRadius:6,marginBottom:8,border:"1px solid #334155"}}>
+                  <div style={{color:"#A3E635"}}>PMS,Monthly report submission,30.04.2026,all</div>
+                  <div style={{color:"#A3E635"}}>AIF,NAV Disclosure,30.04.2026,john</div>
+                  <div style={{color:"#A3E635"}}>Stock Broking,Surveillance Report,15.04.2026,sarah</div>
+                </div>
                 
-                <strong style={{color:"#CBD5E1"}}>JSON Format (one per line):</strong><br/>
-                <span style={{color:"#7DD3FC"}}>{"{"}"category":"PMS","task":"Description","due":"30.04.2026","assignedTo":"all"{"}"}</span><br/><br/>
+                <div style={{marginBottom:8}}><strong style={{color:"#CBD5E1"}}>JSON Format (one per line):</strong></div>
+                <div style={{background:"#1E293B",padding:8,borderRadius:6,marginBottom:8,border:"1px solid #334155"}}>
+                  <div style={{color:"#7DD3FC",fontSize:9}}>{"{"}"category":"PMS","task":"Monthly report","due":"30.04.2026","assignedTo":"all"{"}"}</div>
+                  <div style={{color:"#7DD3FC",fontSize:9}}>{"{"}"category":"AIF","task":"NAV Disclosure","due":"30.04.2026","assignedTo":"john"{"}"}</div>
+                </div>
                 
-                <strong style={{color:"#CBD5E1"}}>assignedTo Options:</strong><br/>
-                <span style={{color:"#A3E635"}}"all"</span> = Visible to all team members<br/>
-                <span style={{color:"#A3E635"}}"username"</span> = Assign to specific person (e.g., "john", "sarah")
+                <div><strong style={{color:"#CBD5E1"}}>assignedTo Field:</strong></div>
+                <div style={{marginLeft:8}}>
+                  <div style={{color:"#A3E635"}}>✓ "all" = Visible to all team members</div>
+                  <div style={{color:"#A3E635"}}>✓ "username" = Assign to specific person (john, sarah, mike, etc.)</div>
+                </div>
               </div>
             </div>
 
-            <div style={{marginBottom:14}}>
-              <label style={{display:"block",fontSize:11,color:"#94A3B8",marginBottom:6}}>Default Assign To (Optional)</label>
-              <input type="text" placeholder="Leave blank for 'all', or enter username" value={bulkImportText.split('\n')[0]?.split(',')[3] || ""} 
-                onChange={e=>{}} 
-                style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#F8FAFC",fontSize:12,outline:"none"}}/>
-              <div style={{fontSize:9,color:"#475569",marginTop:4}}>💡 Tasks with 4th column will use that value instead</div>
-            </div>
-
-            <label style={{display:"block",fontSize:11,color:"#94A3B8",marginBottom:6}}>Paste Tasks Below (CSV or JSON)</label>
-            <textarea value={bulkImportText} onChange={e=>{setBulkImportText(e.target.value); setBulkImportError("");}} placeholder={`Example CSV:\nPMS,Disclosure of Investor Charter,07.04.2026,all\nAIF,NAV Disclosure,30.04.2026,john\nStock Broking,Surveillance Report,15.04.2026,sarah\n\nExample JSON:\n{"category":"PMS","task":"Disclosure of Investor Charter","due":"07.04.2026","assignedTo":"all"}\n{"category":"AIF","task":"NAV Disclosure","due":"30.04.2026","assignedTo":"john"}`} rows={8} style={{width:"100%",padding:"12px",borderRadius:10,boxSizing:"border-box",border:"1px solid #334155",background:"#0F172A",color:"#F8FAFC",fontSize:11,resize:"vertical",fontFamily:"'Space Mono',monospace",marginBottom:10}}/>
-            {bulkImportError && <div style={{background:"#450A0A",color:"#FCA5A5",padding:10,borderRadius:8,fontSize:11,marginBottom:10,border:"1px solid #7F1D1D","whiteSpace":"pre-wrap"}}>{bulkImportError}</div>}
+            <label style={{display:"block",fontSize:11,color:"#94A3B8",marginBottom:6,fontWeight:600}}>Paste Your Tasks Below</label>
+            <textarea value={bulkImportText} onChange={e=>{setBulkImportText(e.target.value); setBulkImportError("");}} placeholder={`PMS,Disclosure of Investor Charter,07.04.2026,all\nAIF,NAV Disclosure,30.04.2026,john\nStock Broking,Surveillance Report,15.04.2026,sarah`} rows={8} style={{width:"100%",padding:"12px",borderRadius:10,boxSizing:"border-box",border:"1px solid #334155",background:"#0F172A",color:"#F8FAFC",fontSize:11,resize:"vertical",fontFamily:"'Space Mono',monospace",marginBottom:10}}/>
+            {bulkImportError && <div style={{background:"#450A0A",color:"#FCA5A5",padding:10,borderRadius:8,fontSize:11,marginBottom:10,border:"1px solid #7F1D1D",whiteSpace:"pre-wrap"}}>{bulkImportError}</div>}
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <button onClick={()=>{setShowBulkImport(false); setBulkImportError("");}} style={{padding:"9px 18px",borderRadius:10,border:"1px solid #334155",background:"transparent",color:"#94A3B8",cursor:"pointer",fontSize:13}}>Cancel</button>
               <button onClick={handleBulkImport} style={{padding:"9px 22px",borderRadius:10,border:"none",background:"#8B5CF6",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>Import Tasks</button>
