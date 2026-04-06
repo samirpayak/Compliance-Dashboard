@@ -191,27 +191,12 @@ let useAPI = false; // Will be set based on API availability
 console.log('🌐 Checking API connection...');
 
 const api = {
-  async getData() {
-    if (!useAPI) return null;
-    try {
-      const res = await fetch(`${API_BASE}/data`, { signal: AbortSignal.timeout(3000) });
-      console.log('✅ API connected');
-      return res.ok ? await res.json() : null;
-    } catch (err) {
-      console.log('⚠️ API unavailable, using localStorage');
-      useAPI = false;
-      return null;
-    }
-  },
-
   async addTask(task) {
-    if (!useAPI) return task;
     try {
       const res = await fetch(`${API_BASE}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(task),
-        signal: AbortSignal.timeout(3000)
+        body: JSON.stringify(task)
       });
       return res.ok ? await res.json() : task;
     } catch (err) {
@@ -219,199 +204,11 @@ const api = {
     }
   },
 
-  async getTasks() {
-    if (!useAPI) return [];
-    try {
-      const res = await fetch(`${API_BASE}/tasks`, { signal: AbortSignal.timeout(3000) });
-      return res.ok ? await res.json() : [];
-    } catch (err) {
-      return [];
-    }
-  },
-
-  async deleteTask(id) {
-    if (!useAPI) return true;
-    try {
-      await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE', signal: AbortSignal.timeout(3000) });
-      return true;
-    } catch (err) {
-      return true;
-    }
-  },
-
-  async updateTaskAssignment(id, assignedTo) {
-    if (!useAPI) return { id, assignedTo };
-    try {
-      const res = await fetch(`${API_BASE}/tasks/${id}/assign`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignedTo }),
-        signal: AbortSignal.timeout(3000)
-      });
-      return res.ok ? await res.json() : { id, assignedTo };
-    } catch (err) {
-      return { id, assignedTo };
-    }
-  },
-
-  async updateStatus(taskId, status, updatedBy, updatedAt) {
-    if (!useAPI) return null;
-    try {
-      await fetch(`${API_BASE}/statuses`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId, status, updatedBy, updatedAt }),
-        signal: AbortSignal.timeout(3000)
-      });
-      return null;
-    } catch (err) {
-      return null;
-    }
-  },
-
-  async getStatuses() {
-    if (!useAPI) return [];
-    try {
-      const res = await fetch(`${API_BASE}/statuses`, { signal: AbortSignal.timeout(3000) });
-      return res.ok ? await res.json() : [];
-    } catch (err) {
-      return [];
-    }
-  },
-
-  async addActivityLog(log) {
-    if (!useAPI) return null;
-    try {
-      await fetch(`${API_BASE}/activity-log`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(log),
-        signal: AbortSignal.timeout(3000)
-      });
-      return null;
-    } catch (err) {
-      return null;
-    }
-  },
-
-  async getActivityLog() {
-    if (!useAPI) return [];
-    try {
-      const res = await fetch(`${API_BASE}/activity-log`, { signal: AbortSignal.timeout(3000) });
-      return res.ok ? await res.json() : [];
-    } catch (err) {
-      return [];
-    }
-  },
-
-  async addTeamMember(username, passwordHash) {
-    if (!useAPI) return { username };
-    try {
-      const res = await fetch(`${API_BASE}/team-members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, passwordHash }),
-        signal: AbortSignal.timeout(3000)
-      });
-      return res.ok ? await res.json() : { username };
-    } catch (err) {
-      return { username };
-    }
-  },
-
-  async getTeamMembers() {
-    if (!useAPI) return [];
-    try {
-      const res = await fetch(`${API_BASE}/team-members`, { signal: AbortSignal.timeout(3000) });
-      return res.ok ? await res.json() : [];
-    } catch (err) {
-      return [];
-    }
-  },
-
-  async loginTeamMember(username, passwordHash) {
-    if (!useAPI) return { success: false };
-    try {
-      const res = await fetch(`${API_BASE}/team-members/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, passwordHash }),
-        signal: AbortSignal.timeout(3000)
-      });
-      return res.ok ? await res.json() : { success: false };
-    } catch (err) {
-      return { success: false };
-    }
-  },
-
-  async removeTeamMember(username) {
-    if (!useAPI) return true;
-    try {
-      await fetch(`${API_BASE}/team-members/${username}`, { method: 'DELETE', signal: AbortSignal.timeout(3000) });
-      return true;
-    } catch (err) {
-      return true;
-    }
-  },
-
-  async setAdminPassword(passwordHash) {
-    if (!useAPI) return true;
-    try {
-      await fetch(`${API_BASE}/admin/password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passwordHash }),
-        signal: AbortSignal.timeout(3000)
-      });
-      return true;
-    } catch (err) {
-      return true;
-    }
-  },
-
-  async loginAdmin(passwordHash) {
-    if (!useAPI) return { success: false };
-    try {
-      const res = await fetch(`${API_BASE}/admin/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passwordHash }),
-        signal: AbortSignal.timeout(3000)
-      });
-      return res.ok ? await res.json() : { success: false };
-    } catch (err) {
-      return { success: false };
-    }
-  },
-
-  async getAdminPassword() {
-    if (!useAPI) return { passwordHash: 'dcb8ad9eb8b' };
-    try {
-      const res = await fetch(`${API_BASE}/admin/password`, { signal: AbortSignal.timeout(3000) });
-      return res.ok ? await res.json() : { passwordHash: 'dcb8ad9eb8b' };
-    } catch (err) {
-      return { passwordHash: 'dcb8ad9eb8b' };
-    }
-  }
-};
-  },
-
-  async getTasks() {
-    try {
-      const res = await fetch(`${API_BASE}/tasks`);
-      return res.ok ? await res.json() : [];
-    } catch (err) {
-      console.error('API Error:', err);
-      return [];
-    }
-  },
-
   async deleteTask(id) {
     try {
-      const res = await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE' });
-      return res.ok;
+      await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE' });
+      return true;
     } catch (err) {
-      console.error('API Error:', err);
       return false;
     }
   },
@@ -425,142 +222,20 @@ const api = {
       });
       return res.ok ? await res.json() : null;
     } catch (err) {
-      console.error('API Error:', err);
       return null;
     }
   },
 
   async updateStatus(taskId, status, updatedBy, updatedAt) {
     try {
-      const res = await fetch(`${API_BASE}/statuses`, {
+      await fetch(`${API_BASE}/statuses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taskId, status, updatedBy, updatedAt })
       });
-      return res.ok ? await res.json() : null;
-    } catch (err) {
-      console.error('API Error:', err);
       return null;
-    }
-  },
-
-  async getStatuses() {
-    try {
-      const res = await fetch(`${API_BASE}/statuses`);
-      return res.ok ? await res.json() : [];
     } catch (err) {
-      console.error('API Error:', err);
-      return [];
-    }
-  },
-
-  async addActivityLog(log) {
-    try {
-      const res = await fetch(`${API_BASE}/activity-log`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(log)
-      });
-      return res.ok ? await res.json() : null;
-    } catch (err) {
-      console.error('API Error:', err);
       return null;
-    }
-  },
-
-  async getActivityLog() {
-    try {
-      const res = await fetch(`${API_BASE}/activity-log`);
-      return res.ok ? await res.json() : [];
-    } catch (err) {
-      console.error('API Error:', err);
-      return [];
-    }
-  },
-
-  async addTeamMember(username, passwordHash) {
-    try {
-      const res = await fetch(`${API_BASE}/team-members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, passwordHash })
-      });
-      return res.ok ? await res.json() : null;
-    } catch (err) {
-      console.error('API Error:', err);
-      return null;
-    }
-  },
-
-  async getTeamMembers() {
-    try {
-      const res = await fetch(`${API_BASE}/team-members`);
-      return res.ok ? await res.json() : [];
-    } catch (err) {
-      console.error('API Error:', err);
-      return [];
-    }
-  },
-
-  async loginTeamMember(username, passwordHash) {
-    try {
-      const res = await fetch(`${API_BASE}/team-members/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, passwordHash })
-      });
-      return res.ok ? await res.json() : { success: false };
-    } catch (err) {
-      console.error('API Error:', err);
-      return { success: false };
-    }
-  },
-
-  async removeTeamMember(username) {
-    try {
-      const res = await fetch(`${API_BASE}/team-members/${username}`, { method: 'DELETE' });
-      return res.ok;
-    } catch (err) {
-      console.error('API Error:', err);
-      return false;
-    }
-  },
-
-  async setAdminPassword(passwordHash) {
-    try {
-      const res = await fetch(`${API_BASE}/admin/password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passwordHash })
-      });
-      return res.ok;
-    } catch (err) {
-      console.error('API Error:', err);
-      return false;
-    }
-  },
-
-  async loginAdmin(passwordHash) {
-    try {
-      const res = await fetch(`${API_BASE}/admin/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passwordHash })
-      });
-      return res.ok ? await res.json() : { success: false };
-    } catch (err) {
-      console.error('API Error:', err);
-      return { success: false };
-    }
-  },
-
-  async getAdminPassword() {
-    try {
-      const res = await fetch(`${API_BASE}/admin/password`);
-      return res.ok ? await res.json() : { passwordHash: 'dcb8ad9eb8b' };
-    } catch (err) {
-      console.error('API Error:', err);
-      return { passwordHash: 'dcb8ad9eb8b' };
     }
   }
 };
