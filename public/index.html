@@ -359,6 +359,8 @@ function App() {
 
   // Real-time polling for live MongoDB synchronization
   useEffect(() => {
+    let hasLoadedInitially = false;
+    
     const loadDataFromAPI = async () => {
       try {
         const response = await fetch(window.location.origin + '/api/data', {
@@ -366,7 +368,18 @@ function App() {
         });
         if (response.ok) {
           const data = await response.json();
-          setTasks(data.tasks || DEFAULT_TASKS);
+          // On initial load, use API tasks or DEFAULT_TASKS as fallback
+          // On polling updates, only update if API returns tasks
+          if (!hasLoadedInitially) {
+            setTasks(data.tasks && data.tasks.length > 0 ? data.tasks : DEFAULT_TASKS);
+            hasLoadedInitially = true;
+          } else {
+            // For subsequent polls, only update if API has data
+            if (data.tasks && data.tasks.length > 0) {
+              setTasks(data.tasks);
+            }
+          }
+          
           const statusObj = {};
           if (Array.isArray(data.statuses)) {
             data.statuses.forEach(s => { statusObj[s.taskId] = s.status; });
@@ -379,7 +392,12 @@ function App() {
           useAPI = true;
         }
       } catch (err) {
-        console.log('⚠️ API unavailable');
+        // On initial load failure, use DEFAULT_TASKS
+        if (!hasLoadedInitially) {
+          setTasks(DEFAULT_TASKS);
+          hasLoadedInitially = true;
+        }
+        console.log('⚠️ API unavailable, using cached data');
       }
     };
     
