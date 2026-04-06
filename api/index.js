@@ -7,8 +7,10 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ['https://compliance-dashboard-rho-sage.vercel.app', 'http://localhost:3000', 'http://localhost:5000'],
-  credentials: true
+  origin: '*', // Allow all origins
+  credentials: false,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 

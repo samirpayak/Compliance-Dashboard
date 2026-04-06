@@ -181,9 +181,11 @@ const STATUS_CFG = {
 const STORE_KEY = "sebi-compliance-dash-v2";
 
 // ─── API CLIENT ───
-const API_BASE = process.env.NODE_ENV === 'production' 
-  ? 'https://compliance-dashboard-rho-sage.vercel.app/api'
-  : 'http://localhost:5000/api';
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:5000/api'
+  : window.location.origin + '/api';
+
+console.log('🌐 API Base:', API_BASE);
 
 const api = {
   async getData() {
@@ -191,7 +193,7 @@ const api = {
       const res = await fetch(`${API_BASE}/data`);
       return res.ok ? await res.json() : null;
     } catch (err) {
-      console.error('API Error:', err);
+      console.error('❌ API Error:', err);
       return null;
     }
   },
