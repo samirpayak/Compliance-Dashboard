@@ -682,9 +682,29 @@ function App() {
     const nt = tasks.map(t => t.id === tid ? {...t, assignedTo: newAssignedTo} : t);
     setTasks(nt);
     
+    // First, check MongoDB health
+    console.log('🔍 Checking MongoDB connection status...');
+    let mongoHealthy = false;
+    let healthData = null;
+    try {
+      const healthRes = await fetch(window.location.origin + '/api/health');
+      healthData = await healthRes.json();
+      mongoHealthy = healthData?.mongoDBConnected === true;
+      console.log(`📊 Health check: ${mongoHealthy ? '✅ Connected' : '❌ Not connected'}`, healthData);
+    } catch (err) {
+      console.error('⚠️ Health check failed:', err.message);
+    }
+    
+    if (!mongoHealthy) {
+      alert(`❌ MongoDB is not connected!\n\n${healthData?.message || 'Database connection unavailable'}\n\nYour assignment will be saved locally, but cannot sync to the database right now.`);
+      setEditingTaskId(null);
+      return;
+    }
+    
     // Try to update in MongoDB (with retry)
     let mongoSuccess = false;
     let retries = 2;
+    let lastError = '';
     
     while (retries > 0 && !mongoSuccess) {
       try {
@@ -704,13 +724,25 @@ function App() {
             console.log('✅ Task assigned to ' + newAssignedTo + ' in MongoDB');
           } else {
             console.error('❌ MongoDB returned invalid task data:', updatedTask);
+            lastError = 'Verification failed - task data invalid';
           }
+        } else if (res.status === 404) {
+          const errorData = await res.json().catch(() => ({}));
+          console.error(`❌ Task not found in MongoDB (404):`, errorData);
+          lastError = `Task "${tid}" not found in database`;
+          break; // Don't retry if task doesn't exist
+        } else if (res.status === 503) {
+          const errorData = await res.json().catch(() => ({}));
+          console.error(`❌ Database unavailable (503):`, errorData);
+          lastError = 'Database temporarily unavailable';
         } else {
           const errorData = await res.json().catch(() => ({}));
           console.error(`❌ Assignment failed (${res.status}):`, errorData.error || res.statusText);
+          lastError = errorData.error || `HTTP ${res.status}`;
         }
       } catch (err) {
         console.error('⚠️ Assignment attempt failed:', err.message);
+        lastError = err.message;
       }
       
       if (!mongoSuccess) {
@@ -737,7 +769,7 @@ function App() {
     if (mongoSuccess) {
       alert("✅ Task assigned to " + newAssignedTo + "! Assignment saved to database.");
     } else {
-      alert("⚠️ Assignment saved locally, but MongoDB sync failed. Your MongoDB connection may be down. Check database status.");
+      alert("⚠️ Assignment saved locally, but MongoDB sync failed.\n\nError: " + lastError + "\n\nCheck the browser console for more details.");
     }
   };
 
