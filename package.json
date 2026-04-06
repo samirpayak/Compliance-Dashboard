@@ -1,0 +1,6 @@
+{
+  "name": "sebi-compliance-dashboard",
+  "version": "1.0.0",
+  "description": "SEBI Compliance Dashboard for tracking monthly compliance tasks",
+  "private": true
+}
