@@ -2,13 +2,6 @@
   "buildCommand": "npm install",
   "outputDirectory": "public",
   "framework": null,
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs18.x",
-      "memory": 1024,
-      "maxDuration": 60
-    }
-  },
   "env": {
     "MONGODB_URI": "mongodb+srv://csjaykular_db_user:xrbbrSgVfRIWJLlE@cluster7.2jtwbga.mongodb.net/?appName=Cluster7",
     "NODE_ENV": "production"
