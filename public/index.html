@@ -355,6 +355,7 @@ function App() {
   const [dateRangeStart, setDateRangeStart] = useState("");
   const [dateRangeEnd, setDateRangeEnd] = useState("");
   const [adminSessionId, setAdminSessionId] = useState(null);
+  const [skipPollingUntil, setSkipPollingUntil] = useState(0);
   const month = "April 2026";
   const isAdmin = role === "admin";
 
@@ -401,6 +402,13 @@ function App() {
     const loadDataFromAPI = async () => {
       // Check session validity
       if (!checkAdminSession()) return;
+      
+      // Skip polling if we just made an assignment (let MongoDB catch up)
+      if (Date.now() < skipPollingUntil) {
+        console.log('⏸️ Skipping poll to let MongoDB catch up with assignment...');
+        return;
+      }
+      
       try {
         const response = await fetch(window.location.origin + '/api/data', {
           signal: AbortSignal.timeout(5000)
@@ -667,31 +675,51 @@ function App() {
   };
 
   const updateTaskAssignment = async (tid, newAssignedTo) => {
-    // Update in API first
-    const taskName = tasks.find(t=>t.id===tid)?.task || "";
+    const tObj = tasks.find(t=>t.id===tid);
+    const oldAssignedTo = tObj?.assignedTo;
+    
+    // Update local state immediately for UI responsiveness
+    const nt = tasks.map(t => t.id === tid ? {...t, assignedTo: newAssignedTo} : t);
+    setTasks(nt);
+    
+    // Try to update in MongoDB
+    let mongoSuccess = false;
     try {
       const res = await fetch(window.location.origin + '/api/tasks/' + tid + '/assign', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ assignedTo: newAssignedTo }),
-        signal: AbortSignal.timeout(3000)
+        signal: AbortSignal.timeout(5000)
       });
       if (res.ok) {
-        console.log('✅ Task assigned to ' + newAssignedTo + ' in MongoDB');
+        const updatedTask = await res.json();
+        // Verify MongoDB saved the assignment
+        if (updatedTask.assignedTo === newAssignedTo) {
+          mongoSuccess = true;
+          console.log('✅ Task assigned to ' + newAssignedTo + ' in MongoDB');
+        }
       }
     } catch (err) {
-      console.log('⚠️ API unavailable for assignment');
+      console.log('⚠️ MongoDB assignment failed: ' + err.message);
     }
     
-    // Update local state immediately
-    const nt = tasks.map(t => t.id === tid ? {...t, assignedTo: newAssignedTo} : t);
-    setTasks(nt);
-    const tObj = tasks.find(t=>t.id===tid);
+    // Update activity log
     const nl = [{taskId:tid,taskName:(tObj?.task||"").substring(0,60)+"...",status:"assigned to "+newAssignedTo,by:loginName,at:new Date().toISOString()},...activityLog].slice(0,200);
     setActivityLog(nl);
+    
+    // Persist to localStorage as backup
     persist(nt, null, nl);
+    
     setEditingTaskId(null);
-    alert("✅ Task assigned to " + newAssignedTo + "! They will see it on next refresh.");
+    
+    // Skip polling for 5 seconds to let MongoDB catch up with the assignment
+    setSkipPollingUntil(Date.now() + 5000);
+    
+    if (mongoSuccess) {
+      alert("✅ Task assigned to " + newAssignedTo + "! Assignment saved to database.");
+    } else {
+      alert("⚠️ Task assigned locally, but database sync may have failed. Try again if not visible on refresh.");
+    }
   };
 
   const updateStatus = async (taskId, status) => {
