@@ -634,50 +634,40 @@ function App() {
   const isAdmin = role === "admin";
 
   useEffect(() => {
-    // Load data from API backend
+    // Try to load from MongoDB API, fallback to localStorage
     const loadData = async () => {
       try {
-        const data = await api.getData();
-        if (data) {
+        const response = await fetch(window.location.origin + '/api/data', {
+          signal: AbortSignal.timeout(5000)
+        });
+        if (response.ok) {
+          const data = await response.json();
           setTasks(data.tasks || DEFAULT_TASKS);
-          setStatuses(data.statuses ? Object.fromEntries(data.statuses.map(s => [s.taskId, s])) : {});
-          setActivityLog(data.activityLog || []);
-          setTeamMembers(data.teamMembers || []);
-          
-          // Convert array of statuses to object format
           const statusObj = {};
           if (Array.isArray(data.statuses)) {
-            data.statuses.forEach(s => {
-              statusObj[s.taskId] = s;
-            });
+            data.statuses.forEach(s => { statusObj[s.taskId] = s.status; });
           }
           setStatuses(statusObj);
-          
+          setActivityLog(data.activityLog || []);
+          setTeamMembers(data.teamMembers || []);
+          setUserCredentials(data.userCredentials || {});
           if (data.adminPassword) setAdminPassword(data.adminPassword);
-        } else {
-          // Fallback to localStorage
-          const d = loadStore();
-          if (d) {
-            setTasks(d.tasks || DEFAULT_TASKS);
-            setStatuses(d.statuses || {});
-            setActivityLog(d.activityLog || []);
-            setTeamMembers(d.teamMembers || []);
-            setUserCredentials(d.userCredentials || {});
-            if (d.adminPassword) setAdminPassword(d.adminPassword);
-          }
+          console.log('✅ Loaded from MongoDB');
+          return;
         }
       } catch (err) {
-        console.error('Error loading data:', err);
-        // Fallback to localStorage
-        const d = loadStore();
-        if (d) {
-          setTasks(d.tasks || DEFAULT_TASKS);
-          setStatuses(d.statuses || {});
-          setActivityLog(d.activityLog || []);
-          setTeamMembers(d.teamMembers || []);
-          setUserCredentials(d.userCredentials || {});
-          if (d.adminPassword) setAdminPassword(d.adminPassword);
-        }
+        console.log('⚠️ API unavailable, using localStorage');
+      }
+      
+      // Fallback to localStorage
+      const d = loadStore();
+      if (d) {
+        setTasks(d.tasks || DEFAULT_TASKS);
+        setStatuses(d.statuses || {});
+        setActivityLog(d.activityLog || []);
+        setTeamMembers(d.teamMembers || []);
+        setUserCredentials(d.userCredentials || {});
+        if (d.adminPassword) setAdminPassword(d.adminPassword);
       }
     };
     loadData();
@@ -771,14 +761,34 @@ function App() {
     persist(nt, null, nl, null);
   };
 
-  const handleTeamMemberLogin = () => {
+  const handleTeamMemberLogin = async () => {
     if (!loginName.trim() || !loginPassword.trim()) {
       setLoginError("Please enter username and password");
       return;
     }
-    const hashedPwd = hashPassword(loginPassword);
     
-    // Check credentials locally from state
+    // Try API first
+    try {
+      const response = await fetch(window.location.origin + '/api/team-members/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loginName.trim(), password: loginPassword }),
+        signal: AbortSignal.timeout(3000)
+      });
+      if (response.ok) {
+        console.log('✅ Logged in via MongoDB');
+        setRole("team");
+        setLoginName(loginName.trim());
+        setLoginPassword("");
+        setLoginError("");
+        return;
+      }
+    } catch (err) {
+      console.log('⚠️ API unavailable, checking local credentials');
+    }
+    
+    // Fallback to local check
+    const hashedPwd = hashPassword(loginPassword);
     if (userCredentials[loginName.trim()] === hashedPwd) {
       setRole("team");
       setLoginPassword("");
@@ -788,14 +798,34 @@ function App() {
     }
   };
 
-  const handleAdminLogin = () => {
+  const handleAdminLogin = async () => {
     if (!loginPassword.trim()) {
       setLoginError("Please enter admin password");
       return;
     }
-    const hashedPwd = hashPassword(loginPassword);
     
-    // Check password locally
+    // Try API first
+    try {
+      const response = await fetch(window.location.origin + '/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: loginPassword }),
+        signal: AbortSignal.timeout(3000)
+      });
+      if (response.ok) {
+        console.log('✅ Logged in as Admin via MongoDB');
+        setRole("admin");
+        setLoginName("Admin");
+        setLoginPassword("");
+        setLoginError("");
+        return;
+      }
+    } catch (err) {
+      console.log('⚠️ API unavailable, checking local password');
+    }
+    
+    // Fallback to local check
+    const hashedPwd = hashPassword(loginPassword);
     if (hashedPwd === adminPassword) {
       setRole("admin");
       setLoginName("Admin");
@@ -805,7 +835,7 @@ function App() {
     }
   };
 
-  const addTeamMember = () => {
+  const addTeamMember = async () => {
     if (!newTeamMemberName.trim() || !newTeamMemberPassword.trim()) {
       alert("Please enter both username and password");
       return;
@@ -815,8 +845,35 @@ function App() {
       return;
     }
     
-    const hashedPwd = hashPassword(newTeamMemberPassword);
+    // Try API first
+    try {
+      const response = await fetch(window.location.origin + '/api/team-members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: newTeamMemberName.trim(), password: newTeamMemberPassword }),
+        signal: AbortSignal.timeout(3000)
+      });
+      if (response.ok) {
+        console.log('✅ Added team member to MongoDB');
+        setNewTeamMemberName("");
+        setNewTeamMemberPassword("");
+        // Reload from API
+        try {
+          const teamRes = await fetch(window.location.origin + '/api/team-members', { signal: AbortSignal.timeout(3000) });
+          if (teamRes.ok) {
+            const data = await teamRes.json();
+            setTeamMembers(data.teamMembers || []);
+            persist(null, null, null, data.teamMembers, null, null);
+            return;
+          }
+        } catch (err) {}
+      }
+    } catch (err) {
+      console.log('⚠️ API unavailable, adding locally');
+    }
     
+    // Fallback to local
+    const hashedPwd = hashPassword(newTeamMemberPassword);
     const ntm = [...teamMembers, newTeamMemberName.trim()];
     const nuc = {...userCredentials, [newTeamMemberName.trim()]: hashedPwd};
     setTeamMembers(ntm);
@@ -1013,6 +1070,8 @@ function App() {
             <span style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:isAdmin?"#312E81":"#1E3A5F",color:isAdmin?"#A5B4FC":"#7DD3FC",border:"1px solid "+(isAdmin?"#4338CA":"#0369A1")}}>{isAdmin?"ADMIN":"TEAM"}: {loginName}</span>
             {isAdmin && <button onClick={()=>setShowTeamManager(!showTeamManager)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#1E293B",color:"#94A3B8",border:"1px solid #334155",cursor:"pointer"}}>👥 Team Members</button>}
             {isAdmin && <button onClick={()=>setShowLog(!showLog)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#1E293B",color:"#94A3B8",border:"1px solid #334155",cursor:"pointer"}}>📜 Activity Log</button>}
+            {isAdmin && <button onClick={()=>{const dataStr = JSON.stringify({tasks,statuses,activityLog,teamMembers,userCredentials,adminPassword});const blob = new Blob([dataStr], {type: 'application/json'});const url = URL.createObjectURL(blob);const a = document.createElement('a');a.href = url;a.download = `compliance-data-${new Date().toISOString().split('T')[0]}.json`;a.click();alert('✅ Data saved! Send this file to other users.');}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#22C55E",color:"#000",border:"1px solid #22C55E",cursor:"pointer"}}>📥 Export</button>}
+            {isAdmin && <button onClick={()=>{const input = document.createElement('input');input.type = 'file';input.accept = '.json';input.onchange = (e) => {const file = e.target.files[0];const reader = new FileReader();reader.onload = (event) => {try {const imported = JSON.parse(event.target.result);if (imported.tasks && imported.teamMembers) {setTasks(imported.tasks);setStatuses(imported.statuses || {});setActivityLog(imported.activityLog || []);setTeamMembers(imported.teamMembers);setUserCredentials(imported.userCredentials || {});if (imported.adminPassword) setAdminPassword(imported.adminPassword);persist(imported.tasks, imported.statuses, imported.activityLog, imported.teamMembers, imported.userCredentials, imported.adminPassword);alert('✅ Data loaded successfully!');} else {alert('❌ Invalid file format');}} catch(err) {alert('❌ Error: ' + err.message);}};reader.readAsText(file);};input.click();}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#3B82F6",color:"#fff",border:"1px solid #3B82F6",cursor:"pointer"}}>📤 Import</button>}
             <button onClick={()=>{setRole(null);setLoginName("");setLoginPassword("");}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,background:"transparent",color:"#64748B",border:"1px solid #334155",cursor:"pointer"}}>Logout</button>
           </div>
         </div>
