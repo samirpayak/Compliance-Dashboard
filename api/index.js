@@ -83,7 +83,7 @@ app.get('/api/data', async (req, res) => {
     
     // Get admin password hash
     const admin = await Admin.findOne({ key: 'admin' });
-    const adminPassword = admin?.passwordHash || 'dcb8ad9eb8b'; // default hash for "admin123"
+    const adminPassword = admin?.passwordHash || '39c43b7d'; // default hash for "admin123"
     
     res.json({
       tasks,

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hash Test</title>
+</head>
+<body>
+<h1>Password Hash Calculator</h1>
+<input type="text" id="pwd" value="admin123" placeholder="Enter password">
+<button onclick="hashIt()">Calculate Hash</button>
+<p id="result"></p>
+
+<script>
+function hashPassword(pwd) {
+  let hash = 0;
+  for (let i = 0; i < pwd.length; i++) {
+    const char = pwd.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(16);
+}
+
+function hashIt() {
+  const pwd = document.getElementById('pwd').value;
+  const result = hashPassword(pwd);
+  document.getElementById('result').innerHTML = `Hash for "${pwd}": <strong>${result}</strong>`;
+}
+
+// Auto-calculate for admin123
+window.onload = () => {
+  const result = hashPassword('admin123');
+  document.getElementById('result').innerHTML = `Hash for "admin123": <strong>${result}</strong>`;
+};
+</script>
+</body>
+</html>
