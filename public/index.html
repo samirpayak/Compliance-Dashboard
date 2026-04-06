@@ -763,11 +763,37 @@ function App() {
     
     setEditingTaskId(null);
     
-    // Skip polling for 5 seconds to let MongoDB catch up with the assignment
-    setSkipPollingUntil(Date.now() + 5000);
-    
     if (mongoSuccess) {
-      alert("✅ Task assigned to " + newAssignedTo + "! Assignment saved to database.");
+      // Force refresh all tasks from MongoDB to confirm assignment
+      console.log('🔄 Forcing refresh of all tasks from MongoDB...');
+      try {
+        const refreshRes = await fetch(window.location.origin + '/api/data', {
+          signal: AbortSignal.timeout(5000)
+        });
+        if (refreshRes.ok) {
+          const freshData = await refreshRes.json();
+          if (freshData.tasks && Array.isArray(freshData.tasks)) {
+            console.log(`📊 Refreshed ${freshData.tasks.length} tasks from MongoDB`);
+            setTasks(freshData.tasks);
+            
+            // Verify the assignment was saved
+            const assignedTask = freshData.tasks.find(t => t.id === tid);
+            if (assignedTask && assignedTask.assignedTo === newAssignedTo) {
+              console.log(`✅ CONFIRMED: Assignment persisted in MongoDB`);
+              alert("✅ Task assigned to " + newAssignedTo + "!\n\n✓ Assignment saved to database and confirmed.");
+            } else {
+              console.warn(`⚠️ Assignment not confirmed in refreshed data`);
+              alert("⚠️ Assignment saved locally but verification failed.\n\nPlease refresh the page to confirm.");
+            }
+          }
+        }
+      } catch (err) {
+        console.error('⚠️ Failed to refresh tasks:', err.message);
+        alert("✅ Task assigned to " + newAssignedTo + "!\n\n(Refreshing task list failed, but assignment was saved)");
+      }
+      
+      // Skip polling for 2 seconds after refresh
+      setSkipPollingUntil(Date.now() + 2000);
     } else {
       alert("⚠️ Assignment saved locally, but MongoDB sync failed.\n\nError: " + lastError + "\n\nCheck the browser console for more details.");
     }

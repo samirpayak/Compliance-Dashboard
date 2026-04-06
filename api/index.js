@@ -328,24 +328,24 @@ app.patch('/api/tasks/:id/assign', checkMongoConnection, async (req, res) => {
     }
     
     console.log(`\n📝 ═══════════════════════════════════════`);
-    console.log(`📋 Assignment Request: taskId=${taskId}, assignedTo=${assignedTo}`);
-    console.log(`🔍 Querying MongoDB for task with id="${taskId}"`);
+    console.log(`📋 Assignment Request: taskId="${taskId}" → assignedTo="${assignedTo}"`);
     
-    // First, check if task exists
-    const taskExists = await Task.findOne({ id: taskId });
-    if (!taskExists) {
-      console.warn(`❌ Task "${taskId}" NOT FOUND! Checking available IDs...`);
-      const allIds = await Task.find().select('id').limit(10);
-      console.warn(`📌 Sample task IDs in DB: ${allIds.map(t => t.id).join(', ')}`);
+    // First, verify task exists
+    const taskBefore = await Task.findOne({ id: taskId });
+    if (!taskBefore) {
+      console.warn(`❌ Task "${taskId}" NOT FOUND!`);
+      const allTasks = await Task.find().select('id assignedTo').limit(10);
+      console.warn(`📌 Sample tasks in DB:`);
+      allTasks.forEach(t => console.warn(`   - ${t.id} (assigned to: ${t.assignedTo || 'null'})`));
       return res.status(404).json({ 
         error: `Task not found: ${taskId}`,
-        available: allIds.map(t => t.id)
+        hint: 'Check task ID format - should match tasks in database'
       });
     }
     
-    console.log(`✓ Task exists, updating assignment...`);
+    console.log(`✓ Task found in DB: id="${taskBefore.id}", currentAssignment="${taskBefore.assignedTo}"`);
     
-    // Find and update the task
+    // Perform the update
     const task = await Task.findOneAndUpdate(
       { id: taskId },
       { 
@@ -356,26 +356,34 @@ app.patch('/api/tasks/:id/assign', checkMongoConnection, async (req, res) => {
     );
     
     if (!task) {
-      console.error(`❌ findOneAndUpdate returned null for task ${taskId}`);
-      return res.status(500).json({ error: 'Update query failed' });
+      console.error(`❌ findOneAndUpdate returned null`);
+      return res.status(500).json({ error: 'Update failed' });
     }
     
-    // Verify the update worked
+    // Verify the update actually worked
     if (task.assignedTo !== assignedTo) {
-      console.error(`❌ Update verification failed: expected ${assignedTo}, got ${task.assignedTo}`);
+      console.error(`❌ Verification FAILED: expected "${assignedTo}", got "${task.assignedTo}"`);
       return res.status(500).json({ error: 'Assignment verification failed' });
     }
     
-    console.log(`✅ SUCCESS! Task ${taskId} → ${assignedTo}`);
+    // Double-check by querying again
+    const taskAfter = await Task.findOne({ id: taskId });
+    if (!taskAfter || taskAfter.assignedTo !== assignedTo) {
+      console.error(`❌ Double-check FAILED: Assignment did not persist`);
+      return res.status(500).json({ error: 'Assignment did not persist' });
+    }
+    
+    console.log(`✅ SUCCESS! Task "${taskId}" now assigned to "${assignedTo}"`);
+    console.log(`✅ Double-checked: assignment confirmed in database`);
     console.log(`═══════════════════════════════════════\n`);
+    
     res.json(task);
   } catch (err) {
     console.error(`❌ Assignment error: ${err.message}`);
     console.error(err.stack);
     res.status(500).json({ 
       error: 'Assignment failed',
-      message: err.message,
-      type: err.name
+      message: err.message
     });
   }
 });
