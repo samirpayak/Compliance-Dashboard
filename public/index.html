@@ -329,7 +329,8 @@ function initializeTasksWithOwners(tasks, currentUser) {
 function App() {
   const [role, setRole] = useState(null);
   const [loginName, setLoginName] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
+  const [teamMemberPassword, setTeamMemberPassword] = useState("");
+  const [adminLoginPassword, setAdminLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [tasks, setTasks] = useState(DEFAULT_TASKS);
   const [statuses, setStatuses] = useState({});
@@ -499,12 +500,12 @@ function App() {
   };
 
   const handleTeamMemberLogin = async () => {
-    if (!loginName.trim() || !loginPassword.trim()) {
+    if (!loginName.trim() || !teamMemberPassword.trim()) {
       setLoginError("Please enter username and password");
       return;
     }
     
-    const hashedPwd = hashPassword(loginPassword);
+    const hashedPwd = hashPassword(teamMemberPassword);
     
     // Try API first
     try {
@@ -518,7 +519,7 @@ function App() {
         console.log('✅ Logged in via MongoDB');
         setRole("team");
         setLoginName(loginName.trim());
-        setLoginPassword("");
+        setTeamMemberPassword("");
         setLoginError("");
         return;
       }
@@ -529,7 +530,7 @@ function App() {
     // Fallback to local check
     if (userCredentials[loginName.trim()] === hashedPwd) {
       setRole("team");
-      setLoginPassword("");
+      setTeamMemberPassword("");
       setLoginError("");
     } else {
       setLoginError("Invalid username or password");
@@ -537,12 +538,12 @@ function App() {
   };
 
   const handleAdminLogin = async () => {
-    if (!loginPassword.trim()) {
+    if (!adminLoginPassword.trim()) {
       setLoginError("Please enter admin password");
       return;
     }
     
-    const hashedPwd = hashPassword(loginPassword);
+    const hashedPwd = hashPassword(adminLoginPassword);
     
     // Try API first
     try {
@@ -556,7 +557,7 @@ function App() {
         console.log('✅ Logged in as Admin via MongoDB');
         setRole("admin");
         setLoginName("Admin");
-        setLoginPassword("");
+        setAdminLoginPassword("");
         setLoginError("");
         return;
       }
@@ -759,7 +760,7 @@ function App() {
           
           <div style={{marginBottom:14}}>
             <label style={{display:"block",fontSize:11,color:"#94A3B8",marginBottom:6}}>Password</label>
-            <input type="password" placeholder="Enter your password" value={loginPassword} onChange={e=>{setLoginPassword(e.target.value);setLoginError("");}} onKeyDown={e=>e.key==="Enter" && handleTeamMemberLogin()}
+            <input type="password" placeholder="Enter your password" value={teamMemberPassword} onChange={e=>{setTeamMemberPassword(e.target.value);setLoginError("");}} onKeyDown={e=>e.key==="Enter" && handleTeamMemberLogin()}
               style={{width:"100%",boxSizing:"border-box",padding:"11px 14px",borderRadius:10,border:"1px solid #334155",background:"#0F172A",color:"#F8FAFC",fontSize:14,outline:"none"}}/>
           </div>
 
@@ -782,7 +783,7 @@ function App() {
           
           <div style={{marginBottom:14}}>
             <label style={{display:"block",fontSize:11,color:"#94A3B8",marginBottom:6}}>Admin Password</label>
-            <input type="password" placeholder="Enter admin password" value={loginPassword} onChange={e=>{setLoginPassword(e.target.value);setLoginError("");}} onKeyDown={e=>e.key==="Enter" && handleAdminLogin()}
+            <input type="password" placeholder="Enter admin password" value={adminLoginPassword} onChange={e=>{setAdminLoginPassword(e.target.value);setLoginError("");}} onKeyDown={e=>e.key==="Enter" && handleAdminLogin()}
               style={{width:"100%",boxSizing:"border-box",padding:"11px 14px",borderRadius:10,border:"1px solid #334155",background:"#0F172A",color:"#F8FAFC",fontSize:14,outline:"none"}}/>
           </div>
 
@@ -812,7 +813,7 @@ function App() {
             {isAdmin && <button onClick={()=>setShowLog(!showLog)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#1E293B",color:"#94A3B8",border:"1px solid #334155",cursor:"pointer"}}>📜 Activity Log</button>}
             {isAdmin && <button onClick={()=>{const dataStr = JSON.stringify({tasks,statuses,activityLog,teamMembers,userCredentials,adminPassword});const blob = new Blob([dataStr], {type: 'application/json'});const url = URL.createObjectURL(blob);const a = document.createElement('a');a.href = url;a.download = `compliance-data-${new Date().toISOString().split('T')[0]}.json`;a.click();alert('✅ Data saved! Send this file to other users.');}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#22C55E",color:"#000",border:"1px solid #22C55E",cursor:"pointer"}}>📥 Export</button>}
             {isAdmin && <button onClick={()=>{const input = document.createElement('input');input.type = 'file';input.accept = '.json';input.onchange = (e) => {const file = e.target.files[0];const reader = new FileReader();reader.onload = (event) => {try {const imported = JSON.parse(event.target.result);if (imported.tasks && imported.teamMembers) {setTasks(imported.tasks);setStatuses(imported.statuses || {});setActivityLog(imported.activityLog || []);setTeamMembers(imported.teamMembers);setUserCredentials(imported.userCredentials || {});if (imported.adminPassword) setAdminPassword(imported.adminPassword);persist(imported.tasks, imported.statuses, imported.activityLog, imported.teamMembers, imported.userCredentials, imported.adminPassword);alert('✅ Data loaded successfully!');} else {alert('❌ Invalid file format');}} catch(err) {alert('❌ Error: ' + err.message);}};reader.readAsText(file);};input.click();}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#3B82F6",color:"#fff",border:"1px solid #3B82F6",cursor:"pointer"}}>📤 Import</button>}
-            <button onClick={()=>{setRole(null);setLoginName("");setLoginPassword("");}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,background:"transparent",color:"#64748B",border:"1px solid #334155",cursor:"pointer"}}>Logout</button>
+            <button onClick={()=>{setRole(null);setLoginName("");setTeamMemberPassword("");setAdminLoginPassword("");}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,background:"transparent",color:"#64748B",border:"1px solid #334155",cursor:"pointer"}}>Logout</button>
           </div>
         </div>
       </div>
