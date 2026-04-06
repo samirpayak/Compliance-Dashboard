@@ -358,6 +358,26 @@ function App() {
   const month = "April 2026";
   const isAdmin = role === "admin";
 
+  // Load login state from localStorage on app mount
+  useEffect(() => {
+    try {
+      const savedLogin = localStorage.getItem('user-login-state');
+      if (savedLogin) {
+        const loginState = JSON.parse(savedLogin);
+        if (loginState.role && loginState.loginName) {
+          setRole(loginState.role);
+          setLoginName(loginState.loginName);
+          if (loginState.adminSessionId) {
+            setAdminSessionId(loginState.adminSessionId);
+          }
+          console.log('✅ Restored login session for: ' + loginState.loginName);
+        }
+      }
+    } catch (err) {
+      console.log('⚠️ Could not restore login state');
+    }
+  }, []);
+
   // Real-time polling for live MongoDB synchronization
   useEffect(() => {
     let hasLoadedInitially = false;
@@ -474,6 +494,11 @@ function App() {
         console.log('✅ Logged in via MongoDB');
         setRole("team");
         setLoginName(username);
+        // Save login state for persistence across page refreshes
+        localStorage.setItem('user-login-state', JSON.stringify({
+          role: "team",
+          loginName: username
+        }));
         setTeamMemberPassword("");
         setLoginError("");
         
@@ -501,6 +526,11 @@ function App() {
     // Fallback to local check
     if (userCredentials[username] === hashedPwd) {
       setRole("team");
+      // Save login state for persistence across page refreshes
+      localStorage.setItem('user-login-state', JSON.stringify({
+        role: "team",
+        loginName: username
+      }));
       setTeamMemberPassword("");
       setLoginError("");
     } else {
@@ -532,6 +562,12 @@ function App() {
         setAdminSessionId(newSessionId);
         setRole("admin");
         setLoginName("Admin");
+        // Save login state for persistence across page refreshes
+        localStorage.setItem('user-login-state', JSON.stringify({
+          role: "admin",
+          loginName: "Admin",
+          adminSessionId: newSessionId
+        }));
         setAdminLoginPassword("");
         setLoginError("");
         return;
@@ -547,6 +583,12 @@ function App() {
       setAdminSessionId(newSessionId);
       setRole("admin");
       setLoginName("Admin");
+      // Save login state for persistence across page refreshes
+      localStorage.setItem('user-login-state', JSON.stringify({
+        role: "admin",
+        loginName: "Admin",
+        adminSessionId: newSessionId
+      }));
       setLoginError("");
     } else {
       setLoginError("Invalid admin password");
@@ -805,7 +847,7 @@ function App() {
             {isAdmin && <button onClick={()=>setShowTeamManager(!showTeamManager)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#1E293B",color:"#94A3B8",border:"1px solid #334155",cursor:"pointer"}}>👥 Team Members</button>}
             {isAdmin && <button onClick={()=>setShowLog(!showLog)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#1E293B",color:"#94A3B8",border:"1px solid #334155",cursor:"pointer"}}>📜 Activity Log</button>}
 
-            <button onClick={()=>{setRole(null);setLoginName("");setTeamMemberPassword("");setAdminLoginPassword("");setAdminSessionId(null);localStorage.removeItem('admin-session-id');}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,background:"transparent",color:"#64748B",border:"1px solid #334155",cursor:"pointer"}}>Logout</button>
+            <button onClick={()=>{setRole(null);setLoginName("");setTeamMemberPassword("");setAdminLoginPassword("");setAdminSessionId(null);localStorage.removeItem('admin-session-id');localStorage.removeItem('user-login-state');}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,background:"transparent",color:"#64748B",border:"1px solid #334155",cursor:"pointer"}}>Logout</button>
           </div>
         </div>
       </div>
