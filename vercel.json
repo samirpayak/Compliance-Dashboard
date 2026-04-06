@@ -1,8 +1,25 @@
 {
-  "buildCommand": null,
+  "buildCommand": "npm install",
   "outputDirectory": "public",
   "framework": null,
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs18.x",
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
+  "env": {
+    "MONGODB_URI": "@mongodb_uri"
+  },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
   ]
 }

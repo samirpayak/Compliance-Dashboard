@@ -2,5 +2,16 @@
   "name": "sebi-compliance-dashboard",
   "version": "1.0.0",
   "description": "SEBI Compliance Dashboard for tracking monthly compliance tasks",
-  "private": true
+  "private": false,
+  "main": "api/index.js",
+  "scripts": {
+    "dev": "node api/index.js",
+    "start": "node api/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3"
+  }
 }

@@ -180,6 +180,205 @@ const STATUS_CFG = {
 
 const STORE_KEY = "sebi-compliance-dash-v2";
 
+// ─── API CLIENT ───
+const API_BASE = process.env.NODE_ENV === 'production' 
+  ? 'https://compliance-dashboard-rho-sage.vercel.app/api'
+  : 'http://localhost:5000/api';
+
+const api = {
+  async getData() {
+    try {
+      const res = await fetch(`${API_BASE}/data`);
+      return res.ok ? await res.json() : null;
+    } catch (err) {
+      console.error('API Error:', err);
+      return null;
+    }
+  },
+
+  async addTask(task) {
+    try {
+      const res = await fetch(`${API_BASE}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(task)
+      });
+      return res.ok ? await res.json() : null;
+    } catch (err) {
+      console.error('API Error:', err);
+      return null;
+    }
+  },
+
+  async getTasks() {
+    try {
+      const res = await fetch(`${API_BASE}/tasks`);
+      return res.ok ? await res.json() : [];
+    } catch (err) {
+      console.error('API Error:', err);
+      return [];
+    }
+  },
+
+  async deleteTask(id) {
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE' });
+      return res.ok;
+    } catch (err) {
+      console.error('API Error:', err);
+      return false;
+    }
+  },
+
+  async updateTaskAssignment(id, assignedTo) {
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${id}/assign`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignedTo })
+      });
+      return res.ok ? await res.json() : null;
+    } catch (err) {
+      console.error('API Error:', err);
+      return null;
+    }
+  },
+
+  async updateStatus(taskId, status, updatedBy, updatedAt) {
+    try {
+      const res = await fetch(`${API_BASE}/statuses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, status, updatedBy, updatedAt })
+      });
+      return res.ok ? await res.json() : null;
+    } catch (err) {
+      console.error('API Error:', err);
+      return null;
+    }
+  },
+
+  async getStatuses() {
+    try {
+      const res = await fetch(`${API_BASE}/statuses`);
+      return res.ok ? await res.json() : [];
+    } catch (err) {
+      console.error('API Error:', err);
+      return [];
+    }
+  },
+
+  async addActivityLog(log) {
+    try {
+      const res = await fetch(`${API_BASE}/activity-log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(log)
+      });
+      return res.ok ? await res.json() : null;
+    } catch (err) {
+      console.error('API Error:', err);
+      return null;
+    }
+  },
+
+  async getActivityLog() {
+    try {
+      const res = await fetch(`${API_BASE}/activity-log`);
+      return res.ok ? await res.json() : [];
+    } catch (err) {
+      console.error('API Error:', err);
+      return [];
+    }
+  },
+
+  async addTeamMember(username, passwordHash) {
+    try {
+      const res = await fetch(`${API_BASE}/team-members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, passwordHash })
+      });
+      return res.ok ? await res.json() : null;
+    } catch (err) {
+      console.error('API Error:', err);
+      return null;
+    }
+  },
+
+  async getTeamMembers() {
+    try {
+      const res = await fetch(`${API_BASE}/team-members`);
+      return res.ok ? await res.json() : [];
+    } catch (err) {
+      console.error('API Error:', err);
+      return [];
+    }
+  },
+
+  async loginTeamMember(username, passwordHash) {
+    try {
+      const res = await fetch(`${API_BASE}/team-members/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, passwordHash })
+      });
+      return res.ok ? await res.json() : { success: false };
+    } catch (err) {
+      console.error('API Error:', err);
+      return { success: false };
+    }
+  },
+
+  async removeTeamMember(username) {
+    try {
+      const res = await fetch(`${API_BASE}/team-members/${username}`, { method: 'DELETE' });
+      return res.ok;
+    } catch (err) {
+      console.error('API Error:', err);
+      return false;
+    }
+  },
+
+  async setAdminPassword(passwordHash) {
+    try {
+      const res = await fetch(`${API_BASE}/admin/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passwordHash })
+      });
+      return res.ok;
+    } catch (err) {
+      console.error('API Error:', err);
+      return false;
+    }
+  },
+
+  async loginAdmin(passwordHash) {
+    try {
+      const res = await fetch(`${API_BASE}/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passwordHash })
+      });
+      return res.ok ? await res.json() : { success: false };
+    } catch (err) {
+      console.error('API Error:', err);
+      return { success: false };
+    }
+  },
+
+  async getAdminPassword() {
+    try {
+      const res = await fetch(`${API_BASE}/admin/password`);
+      return res.ok ? await res.json() : { passwordHash: 'dcb8ad9eb8b' };
+    } catch (err) {
+      console.error('API Error:', err);
+      return { passwordHash: 'dcb8ad9eb8b' };
+    }
+  }
+};
+
 function loadStore() {
   try { const d = localStorage.getItem(STORE_KEY); return d ? JSON.parse(d) : null; }
   catch { return null; }
@@ -249,15 +448,53 @@ function App() {
   const isAdmin = role === "admin";
 
   useEffect(() => {
-    const d = loadStore();
-    if (d) {
-      setTasks(d.tasks || DEFAULT_TASKS);
-      setStatuses(d.statuses || {});
-      setActivityLog(d.activityLog || []);
-      setTeamMembers(d.teamMembers || []);
-      setUserCredentials(d.userCredentials || {});
-      if (d.adminPassword) setAdminPassword(d.adminPassword);
-    }
+    // Load data from API backend
+    const loadData = async () => {
+      try {
+        const data = await api.getData();
+        if (data) {
+          setTasks(data.tasks || DEFAULT_TASKS);
+          setStatuses(data.statuses ? Object.fromEntries(data.statuses.map(s => [s.taskId, s])) : {});
+          setActivityLog(data.activityLog || []);
+          setTeamMembers(data.teamMembers || []);
+          
+          // Convert array of statuses to object format
+          const statusObj = {};
+          if (Array.isArray(data.statuses)) {
+            data.statuses.forEach(s => {
+              statusObj[s.taskId] = s;
+            });
+          }
+          setStatuses(statusObj);
+          
+          if (data.adminPassword) setAdminPassword(data.adminPassword);
+        } else {
+          // Fallback to localStorage
+          const d = loadStore();
+          if (d) {
+            setTasks(d.tasks || DEFAULT_TASKS);
+            setStatuses(d.statuses || {});
+            setActivityLog(d.activityLog || []);
+            setTeamMembers(d.teamMembers || []);
+            setUserCredentials(d.userCredentials || {});
+            if (d.adminPassword) setAdminPassword(d.adminPassword);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading data:', err);
+        // Fallback to localStorage
+        const d = loadStore();
+        if (d) {
+          setTasks(d.tasks || DEFAULT_TASKS);
+          setStatuses(d.statuses || {});
+          setActivityLog(d.activityLog || []);
+          setTeamMembers(d.teamMembers || []);
+          setUserCredentials(d.userCredentials || {});
+          if (d.adminPassword) setAdminPassword(d.adminPassword);
+        }
+      }
+    };
+    loadData();
   }, []);
 
   const persist = (t, s, l, tm, uc, ap) => {
@@ -348,13 +585,16 @@ function App() {
     persist(nt, null, nl, null);
   };
 
-  const handleTeamMemberLogin = () => {
+  const handleTeamMemberLogin = async () => {
     if (!loginName.trim() || !loginPassword.trim()) {
       setLoginError("Please enter username and password");
       return;
     }
     const hashedPwd = hashPassword(loginPassword);
-    if (userCredentials[loginName.trim()] === hashedPwd) {
+    
+    // Verify with API
+    const result = await api.loginTeamMember(loginName.trim(), hashedPwd);
+    if (result.success) {
       setRole("team");
       setLoginPassword("");
       setLoginError("");
@@ -363,13 +603,16 @@ function App() {
     }
   };
 
-  const handleAdminLogin = () => {
+  const handleAdminLogin = async () => {
     if (!loginPassword.trim()) {
       setLoginError("Please enter admin password");
       return;
     }
     const hashedPwd = hashPassword(loginPassword);
-    if (hashedPwd === adminPassword) {
+    
+    // Verify with API
+    const result = await api.loginAdmin(hashedPwd);
+    if (result.success) {
       setRole("admin");
       setLoginName("Admin");
       setLoginError("");
@@ -378,7 +621,7 @@ function App() {
     }
   };
 
-  const addTeamMember = () => {
+  const addTeamMember = async () => {
     if (!newTeamMemberName.trim() || !newTeamMemberPassword.trim()) {
       alert("Please enter both username and password");
       return;
@@ -387,8 +630,17 @@ function App() {
       alert("Team member already exists!");
       return;
     }
+    
+    const hashedPwd = hashPassword(newTeamMemberPassword);
+    // Add to API
+    const result = await api.addTeamMember(newTeamMemberName.trim(), hashedPwd);
+    if (!result) {
+      alert("Failed to add team member");
+      return;
+    }
+    
     const ntm = [...teamMembers, newTeamMemberName.trim()];
-    const nuc = {...userCredentials, [newTeamMemberName.trim()]: hashPassword(newTeamMemberPassword)};
+    const nuc = {...userCredentials, [newTeamMemberName.trim()]: hashedPwd};
     setTeamMembers(ntm);
     setUserCredentials(nuc);
     setNewTeamMemberName("");
@@ -396,7 +648,10 @@ function App() {
     persist(null, null, null, ntm, nuc, null);
   };
 
-  const removeTeamMember = (memberName) => {
+  const removeTeamMember = async (memberName) => {
+    // Remove from API
+    await api.removeTeamMember(memberName);
+    
     const ntm = teamMembers.filter(m => m !== memberName);
     const nuc = {...userCredentials};
     delete nuc[memberName];
@@ -405,19 +660,30 @@ function App() {
     persist(null, null, null, ntm, nuc, null);
   };
 
-  const updateAdminPassword = () => {
+  const updateAdminPassword = async () => {
     if (!newAdminPassword.trim()) {
       alert("Please enter a new admin password");
       return;
     }
     const hashedNewPwd = hashPassword(newAdminPassword);
+    
+    // Update in API
+    const success = await api.setAdminPassword(hashedNewPwd);
+    if (!success) {
+      alert("Failed to update admin password");
+      return;
+    }
+    
     setAdminPassword(hashedNewPwd);
     setNewAdminPassword("");
     persist(null, null, null, null, null, hashedNewPwd);
     alert("Admin password updated successfully!");
   };
 
-  const updateTaskAssignment = (tid, newAssignedTo) => {
+  const updateTaskAssignment = async (tid, newAssignedTo) => {
+    // Update in API
+    await api.updateTaskAssignment(tid, newAssignedTo);
+    
     const nt = tasks.map(t => t.id === tid ? {...t, assignedTo: newAssignedTo} : t);
     setTasks(nt);
     const tObj = tasks.find(t=>t.id===tid);
@@ -427,27 +693,41 @@ function App() {
     setEditingTaskId(null);
   };
 
-  const updateStatus = (taskId, status) => {
-    const ns = {...statuses, [taskId]: {status, updatedBy: loginName, updatedAt: new Date().toISOString()}};
+  const updateStatus = async (taskId, status) => {
+    const updatedAt = new Date().toISOString();
+    
+    // Update in API
+    await api.updateStatus(taskId, status, loginName, updatedAt);
+    
+    const ns = {...statuses, [taskId]: {status, updatedBy: loginName, updatedAt}};
     const tObj = tasks.find(t=>t.id===taskId);
-    const nl = [{taskId, taskName: (tObj?.task||"").substring(0,60)+"...", status, by: loginName, at: new Date().toISOString()}, ...activityLog].slice(0,200);
+    const nl = [{taskId, taskName: (tObj?.task||"").substring(0,60)+"...", status, by: loginName, at: updatedAt}, ...activityLog].slice(0,200);
     setStatuses(ns); setActivityLog(nl); persist(null, ns, nl, null);
   };
 
-  const addTask = () => {
+  const addTask = async () => {
     if (!newTask.task.trim() || !newTask.due.trim()) return;
     const id = "custom-"+Date.now();
-    const nt = [...tasks, {id, category: newTask.category, task: newTask.task, due: newTask.due, type:"custom", assignedTo: newTask.assignedTo}];
-    const nl = [{taskId:id, taskName:"Added: "+newTask.task.substring(0,50), status:"added", by:loginName, at:new Date().toISOString()}, ...activityLog];
+    const taskObj = {id, category: newTask.category, task: newTask.task, due: newTask.due, type:"custom", assignedTo: newTask.assignedTo};
+    
+    // Save to API
+    await api.addTask(taskObj);
+    
+    const nt = [...tasks, taskObj];
+    const nl = [{taskId:id, taskName:"Added: "+newTask.task.substring(0,50), status:"added", by:loginName, at:new Date().toISOString()}, ...activityLog].slice(0,200);
     setTasks(nt); setActivityLog(nl); setNewTask({category:"PMS",task:"",due:"",assignedTo:"all"}); setShowAddModal(false);
     persist(nt, null, nl, null);
   };
 
-  const deleteTask = (taskId) => {
+  const deleteTask = async (taskId) => {
     const tObj = tasks.find(t=>t.id===taskId);
+    
+    // Delete from API
+    await api.deleteTask(taskId);
+    
     const nt = tasks.filter(t=>t.id!==taskId);
     const ns = {...statuses}; delete ns[taskId];
-    const nl = [{taskId, taskName:"Removed: "+(tObj?.task||"").substring(0,50), status:"removed", by:loginName, at:new Date().toISOString()}, ...activityLog];
+    const nl = [{taskId, taskName:"Removed: "+(tObj?.task||"").substring(0,50), status:"removed", by:loginName, at:new Date().toISOString()}, ...activityLog].slice(0,200);
     setTasks(nt); setStatuses(ns); setActivityLog(nl); setShowDeleteConfirm(null);
     persist(nt, ns, nl, null);
   };
