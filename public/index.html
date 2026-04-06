@@ -237,6 +237,67 @@ const api = {
     } catch (err) {
       return null;
     }
+  },
+
+  async addActivityLog(log) {
+    try {
+      await fetch(`${API_BASE}/activity-log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(log)
+      });
+      return null;
+    } catch (err) {
+      return null;
+    }
+  },
+
+  async addTeamMember(username, passwordHash) {
+    try {
+      const res = await fetch(`${API_BASE}/team-members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, passwordHash })
+      });
+      return res.ok ? await res.json() : { username };
+    } catch (err) {
+      return { username };
+    }
+  },
+
+  async removeTeamMember(username) {
+    try {
+      await fetch(`${API_BASE}/team-members/${username}`, { method: 'DELETE' });
+      return true;
+    } catch (err) {
+      return true;
+    }
+  },
+
+  async setAdminPassword(passwordHash) {
+    try {
+      await fetch(`${API_BASE}/admin/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passwordHash })
+      });
+      return true;
+    } catch (err) {
+      return true;
+    }
+  },
+
+  async loginAdmin(passwordHash) {
+    try {
+      const res = await fetch(`${API_BASE}/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passwordHash })
+      });
+      return res.ok ? await res.json() : { success: false };
+    } catch (err) {
+      return { success: false };
+    }
   }
 };
 
