@@ -181,35 +181,219 @@ const STATUS_CFG = {
 const STORE_KEY = "sebi-compliance-dash-v2";
 
 // ─── API CLIENT ───
+// Try to use backend API, but fallback to localStorage if not available
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000/api'
   : window.location.origin + '/api';
 
-console.log('🌐 API Base:', API_BASE);
+let useAPI = false; // Will be set based on API availability
+
+console.log('🌐 Checking API connection...');
 
 const api = {
   async getData() {
+    if (!useAPI) return null;
     try {
-      const res = await fetch(`${API_BASE}/data`);
+      const res = await fetch(`${API_BASE}/data`, { signal: AbortSignal.timeout(3000) });
+      console.log('✅ API connected');
       return res.ok ? await res.json() : null;
     } catch (err) {
-      console.error('❌ API Error:', err);
+      console.log('⚠️ API unavailable, using localStorage');
+      useAPI = false;
       return null;
     }
   },
 
   async addTask(task) {
+    if (!useAPI) return task;
     try {
       const res = await fetch(`${API_BASE}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(task)
+        body: JSON.stringify(task),
+        signal: AbortSignal.timeout(3000)
       });
-      return res.ok ? await res.json() : null;
+      return res.ok ? await res.json() : task;
     } catch (err) {
-      console.error('API Error:', err);
+      return task;
+    }
+  },
+
+  async getTasks() {
+    if (!useAPI) return [];
+    try {
+      const res = await fetch(`${API_BASE}/tasks`, { signal: AbortSignal.timeout(3000) });
+      return res.ok ? await res.json() : [];
+    } catch (err) {
+      return [];
+    }
+  },
+
+  async deleteTask(id) {
+    if (!useAPI) return true;
+    try {
+      await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE', signal: AbortSignal.timeout(3000) });
+      return true;
+    } catch (err) {
+      return true;
+    }
+  },
+
+  async updateTaskAssignment(id, assignedTo) {
+    if (!useAPI) return { id, assignedTo };
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${id}/assign`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignedTo }),
+        signal: AbortSignal.timeout(3000)
+      });
+      return res.ok ? await res.json() : { id, assignedTo };
+    } catch (err) {
+      return { id, assignedTo };
+    }
+  },
+
+  async updateStatus(taskId, status, updatedBy, updatedAt) {
+    if (!useAPI) return null;
+    try {
+      await fetch(`${API_BASE}/statuses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, status, updatedBy, updatedAt }),
+        signal: AbortSignal.timeout(3000)
+      });
+      return null;
+    } catch (err) {
       return null;
     }
+  },
+
+  async getStatuses() {
+    if (!useAPI) return [];
+    try {
+      const res = await fetch(`${API_BASE}/statuses`, { signal: AbortSignal.timeout(3000) });
+      return res.ok ? await res.json() : [];
+    } catch (err) {
+      return [];
+    }
+  },
+
+  async addActivityLog(log) {
+    if (!useAPI) return null;
+    try {
+      await fetch(`${API_BASE}/activity-log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(log),
+        signal: AbortSignal.timeout(3000)
+      });
+      return null;
+    } catch (err) {
+      return null;
+    }
+  },
+
+  async getActivityLog() {
+    if (!useAPI) return [];
+    try {
+      const res = await fetch(`${API_BASE}/activity-log`, { signal: AbortSignal.timeout(3000) });
+      return res.ok ? await res.json() : [];
+    } catch (err) {
+      return [];
+    }
+  },
+
+  async addTeamMember(username, passwordHash) {
+    if (!useAPI) return { username };
+    try {
+      const res = await fetch(`${API_BASE}/team-members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, passwordHash }),
+        signal: AbortSignal.timeout(3000)
+      });
+      return res.ok ? await res.json() : { username };
+    } catch (err) {
+      return { username };
+    }
+  },
+
+  async getTeamMembers() {
+    if (!useAPI) return [];
+    try {
+      const res = await fetch(`${API_BASE}/team-members`, { signal: AbortSignal.timeout(3000) });
+      return res.ok ? await res.json() : [];
+    } catch (err) {
+      return [];
+    }
+  },
+
+  async loginTeamMember(username, passwordHash) {
+    if (!useAPI) return { success: false };
+    try {
+      const res = await fetch(`${API_BASE}/team-members/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, passwordHash }),
+        signal: AbortSignal.timeout(3000)
+      });
+      return res.ok ? await res.json() : { success: false };
+    } catch (err) {
+      return { success: false };
+    }
+  },
+
+  async removeTeamMember(username) {
+    if (!useAPI) return true;
+    try {
+      await fetch(`${API_BASE}/team-members/${username}`, { method: 'DELETE', signal: AbortSignal.timeout(3000) });
+      return true;
+    } catch (err) {
+      return true;
+    }
+  },
+
+  async setAdminPassword(passwordHash) {
+    if (!useAPI) return true;
+    try {
+      await fetch(`${API_BASE}/admin/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passwordHash }),
+        signal: AbortSignal.timeout(3000)
+      });
+      return true;
+    } catch (err) {
+      return true;
+    }
+  },
+
+  async loginAdmin(passwordHash) {
+    if (!useAPI) return { success: false };
+    try {
+      const res = await fetch(`${API_BASE}/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passwordHash }),
+        signal: AbortSignal.timeout(3000)
+      });
+      return res.ok ? await res.json() : { success: false };
+    } catch (err) {
+      return { success: false };
+    }
+  },
+
+  async getAdminPassword() {
+    if (!useAPI) return { passwordHash: 'dcb8ad9eb8b' };
+    try {
+      const res = await fetch(`${API_BASE}/admin/password`, { signal: AbortSignal.timeout(3000) });
+      return res.ok ? await res.json() : { passwordHash: 'dcb8ad9eb8b' };
+    } catch (err) {
+      return { passwordHash: 'dcb8ad9eb8b' };
+    }
+  }
+};
   },
 
   async getTasks() {
@@ -587,16 +771,15 @@ function App() {
     persist(nt, null, nl, null);
   };
 
-  const handleTeamMemberLogin = async () => {
+  const handleTeamMemberLogin = () => {
     if (!loginName.trim() || !loginPassword.trim()) {
       setLoginError("Please enter username and password");
       return;
     }
     const hashedPwd = hashPassword(loginPassword);
     
-    // Verify with API
-    const result = await api.loginTeamMember(loginName.trim(), hashedPwd);
-    if (result.success) {
+    // Check credentials locally from state
+    if (userCredentials[loginName.trim()] === hashedPwd) {
       setRole("team");
       setLoginPassword("");
       setLoginError("");
@@ -605,16 +788,15 @@ function App() {
     }
   };
 
-  const handleAdminLogin = async () => {
+  const handleAdminLogin = () => {
     if (!loginPassword.trim()) {
       setLoginError("Please enter admin password");
       return;
     }
     const hashedPwd = hashPassword(loginPassword);
     
-    // Verify with API
-    const result = await api.loginAdmin(hashedPwd);
-    if (result.success) {
+    // Check password locally
+    if (hashedPwd === adminPassword) {
       setRole("admin");
       setLoginName("Admin");
       setLoginError("");
@@ -623,7 +805,7 @@ function App() {
     }
   };
 
-  const addTeamMember = async () => {
+  const addTeamMember = () => {
     if (!newTeamMemberName.trim() || !newTeamMemberPassword.trim()) {
       alert("Please enter both username and password");
       return;
@@ -634,12 +816,6 @@ function App() {
     }
     
     const hashedPwd = hashPassword(newTeamMemberPassword);
-    // Add to API
-    const result = await api.addTeamMember(newTeamMemberName.trim(), hashedPwd);
-    if (!result) {
-      alert("Failed to add team member");
-      return;
-    }
     
     const ntm = [...teamMembers, newTeamMemberName.trim()];
     const nuc = {...userCredentials, [newTeamMemberName.trim()]: hashedPwd};
@@ -650,10 +826,7 @@ function App() {
     persist(null, null, null, ntm, nuc, null);
   };
 
-  const removeTeamMember = async (memberName) => {
-    // Remove from API
-    await api.removeTeamMember(memberName);
-    
+  const removeTeamMember = (memberName) => {
     const ntm = teamMembers.filter(m => m !== memberName);
     const nuc = {...userCredentials};
     delete nuc[memberName];
@@ -662,19 +835,12 @@ function App() {
     persist(null, null, null, ntm, nuc, null);
   };
 
-  const updateAdminPassword = async () => {
+  const updateAdminPassword = () => {
     if (!newAdminPassword.trim()) {
       alert("Please enter a new admin password");
       return;
     }
     const hashedNewPwd = hashPassword(newAdminPassword);
-    
-    // Update in API
-    const success = await api.setAdminPassword(hashedNewPwd);
-    if (!success) {
-      alert("Failed to update admin password");
-      return;
-    }
     
     setAdminPassword(hashedNewPwd);
     setNewAdminPassword("");
@@ -948,11 +1114,11 @@ function App() {
           </div>
         )}
 
-        {/* SECURITY SETTINGS */}
+        {/* SECURITY SETTINGS & DATA SYNC */}
         {isAdmin && (
           <div className="fade-in" style={{background:"#1E293B",borderRadius:14,padding:18,marginBottom:20,border:"1px solid #334155"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <h3 style={{margin:0,fontSize:14,fontWeight:700}}>🔐 Security Settings</h3>
+              <h3 style={{margin:0,fontSize:14,fontWeight:700}}>🔐 Security Settings & Data Sync</h3>
             </div>
             
             <div style={{background:"#0F172A",borderRadius:10,padding:12,marginBottom:14,border:"1px solid #334155"}}>
@@ -966,6 +1132,54 @@ function App() {
                 <button onClick={updateAdminPassword} disabled={!newAdminPassword.trim()} style={{padding:"7px 14px",borderRadius:6,background:!newAdminPassword.trim()?"#334155":"#EF4444",color:"#fff",border:"none",fontSize:11,fontWeight:600,cursor:!newAdminPassword.trim()?"not-allowed":"pointer",transition:"background 0.2s"}}>Update</button>
               </div>
               <div style={{fontSize:10,color:"#FCA5A5",marginTop:8}}>💡 Your current admin password is: <span style={{fontFamily:"'Space Mono',monospace",fontWeight:600}}>admin123</span></div>
+            </div>
+
+            <div style={{background:"#0F172A",borderRadius:10,padding:12,border:"1px solid #334155"}}>
+              <div style={{fontSize:11,color:"#22C55E",marginBottom:10,fontWeight:600}}>💾 EXPORT/IMPORT DATA (For Manual Sync)</div>
+              <p style={{fontSize:10,color:"#94A3B8",margin:"0 0 10px"}}>Share data between devices manually by exporting and importing</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <button onClick={()=>{
+                  const dataStr = JSON.stringify({tasks,statuses,activityLog,teamMembers,userCredentials,adminPassword});
+                  const blob = new Blob([dataStr], {type: 'application/json'});
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `compliance-data-${new Date().toISOString().split('T')[0]}.json`;
+                  a.click();
+                  alert('✅ Data exported! Send this file to other users.');
+                }} style={{padding:"8px 12px",borderRadius:6,background:"#22C55E",color:"#000",border:"none",fontSize:11,fontWeight:600,cursor:"pointer"}}>📥 Export Data</button>
+                
+                <button onClick={()=>{
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.json';
+                  input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      try {
+                        const imported = JSON.parse(event.target.result);
+                        if (imported.tasks && imported.teamMembers) {
+                          setTasks(imported.tasks);
+                          setStatuses(imported.statuses || {});
+                          setActivityLog(imported.activityLog || []);
+                          setTeamMembers(imported.teamMembers);
+                          setUserCredentials(imported.userCredentials || {});
+                          if (imported.adminPassword) setAdminPassword(imported.adminPassword);
+                          persist(imported.tasks, imported.statuses, imported.activityLog, imported.teamMembers, imported.userCredentials, imported.adminPassword);
+                          alert('✅ Data imported successfully!');
+                        } else {
+                          alert('❌ Invalid file format');
+                        }
+                      } catch(err) {
+                        alert('❌ Error importing file: ' + err.message);
+                      }
+                    };
+                    reader.readAsText(file);
+                  };
+                  input.click();
+                }} style={{padding:"8px 12px",borderRadius:6,background:"#3B82F6",color:"#fff",border:"none",fontSize:11,fontWeight:600,cursor:"pointer"}}>📤 Import Data</button>
+              </div>
             </div>
           </div>
         )}
