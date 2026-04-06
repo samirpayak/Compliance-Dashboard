@@ -354,6 +354,7 @@ function App() {
   const [editingTaskAssignedTo, setEditingTaskAssignedTo] = useState("");
   const [dateRangeStart, setDateRangeStart] = useState("");
   const [dateRangeEnd, setDateRangeEnd] = useState("");
+  const [adminSessionId, setAdminSessionId] = useState(null);
   const month = "April 2026";
   const isAdmin = role === "admin";
 
@@ -361,7 +362,25 @@ function App() {
   useEffect(() => {
     let hasLoadedInitially = false;
     
+    // Check if this admin session is still valid
+    const checkAdminSession = () => {
+      if (role === 'admin') {
+        const currentSession = localStorage.getItem('admin-session-id');
+        if (currentSession && adminSessionId && currentSession !== adminSessionId) {
+          console.log('❌ Admin session invalidated by another login');
+          setRole(null);
+          setLoginName("");
+          setAdminSessionId(null);
+          setLoginError('Your admin session was ended because admin logged in on another device');
+          return false;
+        }
+      }
+      return true;
+    };
+    
     const loadDataFromAPI = async () => {
+      // Check session validity
+      if (!checkAdminSession()) return;
       try {
         const response = await fetch(window.location.origin + '/api/data', {
           signal: AbortSignal.timeout(5000)
@@ -441,21 +460,38 @@ function App() {
     }
     
     const hashedPwd = hashPassword(teamMemberPassword);
+    const username = loginName.trim();
     
     // Try API first
     try {
       const response = await fetch(window.location.origin + '/api/team-members/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: loginName.trim(), passwordHash: hashedPwd }),
+        body: JSON.stringify({ username: username, passwordHash: hashedPwd }),
         signal: AbortSignal.timeout(3000)
       });
       if (response.ok) {
         console.log('✅ Logged in via MongoDB');
         setRole("team");
-        setLoginName(loginName.trim());
+        setLoginName(username);
         setTeamMemberPassword("");
         setLoginError("");
+        
+        // Force immediate data refresh to see assigned tasks
+        try {
+          const dataRes = await fetch(window.location.origin + '/api/data', { signal: AbortSignal.timeout(5000) });
+          if (dataRes.ok) {
+            const data = await dataRes.json();
+            setTasks(data.tasks && data.tasks.length > 0 ? data.tasks : DEFAULT_TASKS);
+            const statusObj = {};
+            if (Array.isArray(data.statuses)) {
+              data.statuses.forEach(s => { statusObj[s.taskId] = s.status; });
+            }
+            setStatuses(statusObj);
+            setActivityLog(data.activityLog || []);
+            console.log('✅ Refreshed tasks for: ' + username);
+          }
+        } catch (err) {}
         return;
       }
     } catch (err) {
@@ -463,7 +499,7 @@ function App() {
     }
     
     // Fallback to local check
-    if (userCredentials[loginName.trim()] === hashedPwd) {
+    if (userCredentials[username] === hashedPwd) {
       setRole("team");
       setTeamMemberPassword("");
       setLoginError("");
@@ -479,6 +515,7 @@ function App() {
     }
     
     const hashedPwd = hashPassword(adminLoginPassword);
+    const newSessionId = Date.now().toString();
     
     // Try API first
     try {
@@ -490,6 +527,9 @@ function App() {
       });
       if (response.ok) {
         console.log('✅ Logged in as Admin via MongoDB');
+        // Store this session ID - invalidates other sessions
+        localStorage.setItem('admin-session-id', newSessionId);
+        setAdminSessionId(newSessionId);
         setRole("admin");
         setLoginName("Admin");
         setAdminLoginPassword("");
@@ -502,6 +542,9 @@ function App() {
     
     // Fallback to local check
     if (hashedPwd === adminPassword) {
+      // Store this session ID - invalidates other sessions
+      localStorage.setItem('admin-session-id', newSessionId);
+      setAdminSessionId(newSessionId);
       setRole("admin");
       setLoginName("Admin");
       setLoginError("");
@@ -582,16 +625,31 @@ function App() {
   };
 
   const updateTaskAssignment = async (tid, newAssignedTo) => {
-    // Update in API
-    await api.updateTaskAssignment(tid, newAssignedTo);
+    // Update in API first
+    const taskName = tasks.find(t=>t.id===tid)?.task || "";
+    try {
+      const res = await fetch(window.location.origin + '/api/tasks/' + tid + '/assign', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignedTo: newAssignedTo }),
+        signal: AbortSignal.timeout(3000)
+      });
+      if (res.ok) {
+        console.log('✅ Task assigned to ' + newAssignedTo + ' in MongoDB');
+      }
+    } catch (err) {
+      console.log('⚠️ API unavailable for assignment');
+    }
     
+    // Update local state immediately
     const nt = tasks.map(t => t.id === tid ? {...t, assignedTo: newAssignedTo} : t);
     setTasks(nt);
     const tObj = tasks.find(t=>t.id===tid);
-    const nl = [{taskId:tid,taskName:(tObj?.task||"").substring(0,60)+"...",status:"reassigned",by:loginName,at:new Date().toISOString()},...activityLog].slice(0,200);
+    const nl = [{taskId:tid,taskName:(tObj?.task||"").substring(0,60)+"...",status:"assigned to "+newAssignedTo,by:loginName,at:new Date().toISOString()},...activityLog].slice(0,200);
     setActivityLog(nl);
     persist(nt, null, nl);
     setEditingTaskId(null);
+    alert("✅ Task assigned to " + newAssignedTo + "! They will see it on next refresh.");
   };
 
   const updateStatus = async (taskId, status) => {
@@ -747,7 +805,7 @@ function App() {
             {isAdmin && <button onClick={()=>setShowTeamManager(!showTeamManager)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#1E293B",color:"#94A3B8",border:"1px solid #334155",cursor:"pointer"}}>👥 Team Members</button>}
             {isAdmin && <button onClick={()=>setShowLog(!showLog)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#1E293B",color:"#94A3B8",border:"1px solid #334155",cursor:"pointer"}}>📜 Activity Log</button>}
 
-            <button onClick={()=>{setRole(null);setLoginName("");setTeamMemberPassword("");setAdminLoginPassword("");}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,background:"transparent",color:"#64748B",border:"1px solid #334155",cursor:"pointer"}}>Logout</button>
+            <button onClick={()=>{setRole(null);setLoginName("");setTeamMemberPassword("");setAdminLoginPassword("");setAdminSessionId(null);localStorage.removeItem('admin-session-id');}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,background:"transparent",color:"#64748B",border:"1px solid #334155",cursor:"pointer"}}>Logout</button>
           </div>
         </div>
       </div>
