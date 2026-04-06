@@ -188,6 +188,17 @@ function saveStore(data) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); } catch(e) { console.error(e); }
 }
 
+// Simple password hash function (client-side)
+function hashPassword(pwd) {
+  let hash = 0;
+  for (let i = 0; i < pwd.length; i++) {
+    const char = pwd.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(16);
+}
+
 // Assign default tasks to all users for initial setup
 function initializeTasksWithOwners(tasks, currentUser) {
   return tasks.map(t => ({...t, assignedTo: t.assignedTo || "all"})); // "all" = visible to all
@@ -197,10 +208,24 @@ function initializeTasksWithOwners(tasks, currentUser) {
 function App() {
   const [role, setRole] = useState(null);
   const [loginName, setLoginName] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [tasks, setTasks] = useState(DEFAULT_TASKS);
   const [statuses, setStatuses] = useState({});
   const [activityLog, setActivityLog] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [userCredentials, setUserCredentials] = useState({}); // {username: hashedPassword}
+  const [adminPassword, setAdminPassword] = useState(() => {
+    // Initialize with hashed "admin123"
+    let hash = 0;
+    const pwd = "admin123";
+    for (let i = 0; i < pwd.length; i++) {
+      const char = pwd.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(16);
+  });
   const [selectedCat, setSelectedCat] = useState("All");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -208,7 +233,10 @@ function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [showLog, setShowLog] = useState(false);
   const [showTeamManager, setShowTeamManager] = useState(false);
+  const [showCredentialsManager, setShowCredentialsManager] = useState(false);
   const [newTeamMemberName, setNewTeamMemberName] = useState("");
+  const [newTeamMemberPassword, setNewTeamMemberPassword] = useState("");
+  const [newAdminPassword, setNewAdminPassword] = useState("");
   const [newTask, setNewTask] = useState({category:"PMS",task:"",due:"",assignedTo:"all"});
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [dateRangeStart, setDateRangeStart] = useState("");
@@ -219,17 +247,20 @@ function App() {
   const isAdmin = role === "admin";
 
   useEffect(() => {
+  useEffect(() => {
     const d = loadStore();
     if (d) {
       setTasks(d.tasks || DEFAULT_TASKS);
       setStatuses(d.statuses || {});
       setActivityLog(d.activityLog || []);
       setTeamMembers(d.teamMembers || []);
+      setUserCredentials(d.userCredentials || {});
+      if (d.adminPassword) setAdminPassword(d.adminPassword);
     }
   }, []);
 
-  const persist = (t, s, l, tm) => {
-    saveStore({ tasks: t||tasks, statuses: s||statuses, activityLog: l||activityLog, teamMembers: tm||teamMembers });
+  const persist = (t, s, l, tm, uc, ap) => {
+    saveStore({ tasks: t||tasks, statuses: s||statuses, activityLog: l||activityLog, teamMembers: tm||teamMembers, userCredentials: uc||userCredentials, adminPassword: ap||adminPassword });
   };
 
   // Parse date in DD.MM.YYYY format to comparable number
@@ -316,22 +347,73 @@ function App() {
     persist(nt, null, nl, null);
   };
 
+  const handleTeamMemberLogin = () => {
+    if (!loginName.trim() || !loginPassword.trim()) {
+      setLoginError("Please enter username and password");
+      return;
+    }
+    const hashedPwd = hashPassword(loginPassword);
+    if (userCredentials[loginName.trim()] === hashedPwd) {
+      setRole("team");
+      setLoginPassword("");
+      setLoginError("");
+    } else {
+      setLoginError("Invalid username or password");
+    }
+  };
+
+  const handleAdminLogin = () => {
+    if (!loginPassword.trim()) {
+      setLoginError("Please enter admin password");
+      return;
+    }
+    const hashedPwd = hashPassword(loginPassword);
+    if (hashedPwd === adminPassword) {
+      setRole("admin");
+      setLoginName("Admin");
+      setLoginError("");
+    } else {
+      setLoginError("Invalid admin password");
+    }
+  };
+
   const addTeamMember = () => {
-    if (!newTeamMemberName.trim()) return;
+    if (!newTeamMemberName.trim() || !newTeamMemberPassword.trim()) {
+      alert("Please enter both username and password");
+      return;
+    }
     if (teamMembers.includes(newTeamMemberName.trim())) {
       alert("Team member already exists!");
       return;
     }
     const ntm = [...teamMembers, newTeamMemberName.trim()];
+    const nuc = {...userCredentials, [newTeamMemberName.trim()]: hashPassword(newTeamMemberPassword)};
     setTeamMembers(ntm);
+    setUserCredentials(nuc);
     setNewTeamMemberName("");
-    persist(null, null, null, ntm);
+    setNewTeamMemberPassword("");
+    persist(null, null, null, ntm, nuc, null);
   };
 
   const removeTeamMember = (memberName) => {
     const ntm = teamMembers.filter(m => m !== memberName);
+    const nuc = {...userCredentials};
+    delete nuc[memberName];
     setTeamMembers(ntm);
-    persist(null, null, null, ntm);
+    setUserCredentials(nuc);
+    persist(null, null, null, ntm, nuc, null);
+  };
+
+  const updateAdminPassword = () => {
+    if (!newAdminPassword.trim()) {
+      alert("Please enter a new admin password");
+      return;
+    }
+    const hashedNewPwd = hashPassword(newAdminPassword);
+    setAdminPassword(hashedNewPwd);
+    setNewAdminPassword("");
+    persist(null, null, null, null, null, hashedNewPwd);
+    alert("Admin password updated successfully!");
   };
 
   const updateStatus = (taskId, status) => {
@@ -407,26 +489,53 @@ function App() {
   /* ── LOGIN SCREEN ── */
   if (!role) return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A 0%,#1E293B 50%,#0F172A 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div className="slide-up" style={{maxWidth:520,width:"100%",textAlign:"center"}}>
-        <div style={{fontSize:13,letterSpacing:4,color:"#64748B",fontFamily:"'Space Mono',monospace",marginBottom:12,textTransform:"uppercase"}}>SEBI Compliance Management</div>
-        <h1 style={{fontSize:42,fontWeight:700,color:"#F8FAFC",margin:"0 0 8px",lineHeight:1.1}}>Compliance<br/>Dashboard</h1>
-        <p style={{color:"#94A3B8",fontSize:15,margin:"0 0 40px"}}>{month} — All Entity Categories</p>
-        <div style={{marginBottom:24}}>
-          <input placeholder="Enter your name" value={loginName} onChange={e=>setLoginName(e.target.value)}
-            onKeyDown={e=>e.key==="Enter" && loginName.trim() && setRole("team")}
-            style={{width:"100%",boxSizing:"border-box",padding:"14px 20px",borderRadius:12,border:"1px solid #334155",background:"#1E293B",color:"#F8FAFC",fontSize:15,outline:"none"}}/>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(320px, 1fr))",gap:24,maxWidth:900,width:"100%"}}>
+        {/* TEAM MEMBER LOGIN */}
+        <div className="slide-up" style={{background:"#1E293B",borderRadius:16,padding:28,border:"1px solid #334155"}}>
+          <div style={{fontSize:13,letterSpacing:3,color:"#64748B",fontFamily:"'Space Mono',monospace",marginBottom:12,textTransform:"uppercase"}}>Team Member</div>
+          <h2 style={{fontSize:24,fontWeight:700,color:"#F8FAFC",margin:"0 0 20px"}}>Login</h2>
+          
+          <div style={{marginBottom:14}}>
+            <label style={{display:"block",fontSize:11,color:"#94A3B8",marginBottom:6}}>Username</label>
+            <input type="text" placeholder="Enter your username" value={loginName} onChange={e=>{setLoginName(e.target.value);setLoginError("");}}
+              style={{width:"100%",boxSizing:"border-box",padding:"11px 14px",borderRadius:10,border:"1px solid #334155",background:"#0F172A",color:"#F8FAFC",fontSize:14,outline:"none"}}/>
+          </div>
+          
+          <div style={{marginBottom:14}}>
+            <label style={{display:"block",fontSize:11,color:"#94A3B8",marginBottom:6}}>Password</label>
+            <input type="password" placeholder="Enter your password" value={loginPassword} onChange={e=>{setLoginPassword(e.target.value);setLoginError("");}} onKeyDown={e=>e.key==="Enter" && handleTeamMemberLogin()}
+              style={{width:"100%",boxSizing:"border-box",padding:"11px 14px",borderRadius:10,border:"1px solid #334155",background:"#0F172A",color:"#F8FAFC",fontSize:14,outline:"none"}}/>
+          </div>
+
+          {loginError && <div style={{background:"#450A0A",color:"#FCA5A5",padding:10,borderRadius:8,fontSize:11,marginBottom:14,border:"1px solid #7F1D1D"}}>{loginError}</div>}
+
+          <button onClick={handleTeamMemberLogin} style={{width:"100%",padding:"12px",borderRadius:10,border:"none",background:"#6366F1",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>Login as Team Member</button>
+          
+          <p style={{color:"#64748B",fontSize:10,margin:"12px 0 0",textAlign:"center"}}>✓ Secure team member login<br/>✓ View only assigned tasks</p>
         </div>
-        <div style={{display:"flex",gap:16,justifyContent:"center"}}>
-          {[{r:"admin",label:"Admin",desc:"Manage tasks & view status",icon:"⚙️"},{r:"team",label:"Team Member",desc:"Update task status",icon:"👤"}].map(({r,label,desc,icon})=>(
-            <button key={r} onClick={()=>loginName.trim()&&setRole(r)} disabled={!loginName.trim()}
-              style={{flex:1,padding:"28px 20px",borderRadius:16,border:"1px solid #334155",background:loginName.trim()?"#1E293B":"#0F172A",color:"#F8FAFC",cursor:loginName.trim()?"pointer":"not-allowed",transition:"all 0.2s",opacity:loginName.trim()?1:0.4}}>
-              <div style={{fontSize:32,marginBottom:12}}>{icon}</div>
-              <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>{label}</div>
-              <div style={{fontSize:12,color:"#64748B"}}>{desc}</div>
-            </button>
-          ))}
+
+        {/* ADMIN LOGIN */}
+        <div className="slide-up" style={{background:"#1E293B",borderRadius:16,padding:28,border:"1px solid #334155"}}>
+          <div style={{fontSize:13,letterSpacing:3,color:"#EF4444",fontFamily:"'Space Mono',monospace",marginBottom:12,textTransform:"uppercase"}}>🔐 Admin</div>
+          <h2 style={{fontSize:24,fontWeight:700,color:"#F8FAFC",margin:"0 0 20px"}}>Secure Access</h2>
+          
+          <div style={{marginBottom:14,padding:12,background:"#452A0A",borderRadius:8,border:"1px solid #7F1D1D"}}>
+            <div style={{fontSize:11,color:"#FCA5A5",marginBottom:8}}>⚠️ Admin Password Required</div>
+            <div style={{fontSize:10,color:"#FCA5A5",lineHeight:1.5}}>Only authorized administrators can access the dashboard management features. Enter the admin password to continue.</div>
+          </div>
+          
+          <div style={{marginBottom:14}}>
+            <label style={{display:"block",fontSize:11,color:"#94A3B8",marginBottom:6}}>Admin Password</label>
+            <input type="password" placeholder="Enter admin password" value={loginPassword} onChange={e=>{setLoginPassword(e.target.value);setLoginError("");}} onKeyDown={e=>e.key==="Enter" && handleAdminLogin()}
+              style={{width:"100%",boxSizing:"border-box",padding:"11px 14px",borderRadius:10,border:"1px solid #334155",background:"#0F172A",color:"#F8FAFC",fontSize:14,outline:"none"}}/>
+          </div>
+
+          {loginError && <div style={{background:"#450A0A",color:"#FCA5A5",padding:10,borderRadius:8,fontSize:11,marginBottom:14,border:"1px solid #7F1D1D"}}>{loginError}</div>}
+
+          <button onClick={handleAdminLogin} style={{width:"100%",padding:"12px",borderRadius:10,border:"none",background:"#EF4444",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>Login as Admin</button>
+          
+          <p style={{color:"#64748B",fontSize:10,margin:"12px 0 0",textAlign:"center"}}>✓ Full system access<br/>✓ Manage team & tasks</p>
         </div>
-        <p style={{color:"#334155",fontSize:11,marginTop:32}}>Data saved in your browser (localStorage). Share this HTML file across your team.</p>
       </div>
     </div>
   );
@@ -445,7 +554,7 @@ function App() {
             <span style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:isAdmin?"#312E81":"#1E3A5F",color:isAdmin?"#A5B4FC":"#7DD3FC",border:"1px solid "+(isAdmin?"#4338CA":"#0369A1")}}>{isAdmin?"ADMIN":"TEAM"}: {loginName}</span>
             {isAdmin && <button onClick={()=>setShowTeamManager(!showTeamManager)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#1E293B",color:"#94A3B8",border:"1px solid #334155",cursor:"pointer"}}>👥 Team Members</button>}
             {isAdmin && <button onClick={()=>setShowLog(!showLog)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,background:"#1E293B",color:"#94A3B8",border:"1px solid #334155",cursor:"pointer"}}>📜 Activity Log</button>}
-            <button onClick={()=>{setRole(null);setLoginName("");}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,background:"transparent",color:"#64748B",border:"1px solid #334155",cursor:"pointer"}}>Logout</button>
+            <button onClick={()=>{setRole(null);setLoginName("");setLoginPassword("");}} style={{padding:"5px 12px",borderRadius:20,fontSize:11,background:"transparent",color:"#64748B",border:"1px solid #334155",cursor:"pointer"}}>Logout</button>
           </div>
         </div>
       </div>
@@ -507,23 +616,64 @@ function App() {
               <h3 style={{margin:0,fontSize:14,fontWeight:700}}>👥 Team Members</h3>
               <button onClick={()=>setShowTeamManager(false)} style={{background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:16}}>✕</button>
             </div>
-            <div style={{display:"flex",gap:8,marginBottom:12}}>
-              <input type="text" placeholder="Enter team member name" value={newTeamMemberName} onChange={e=>setNewTeamMemberName(e.target.value)} onKeyDown={e=>e.key==="Enter" && addTeamMember()}
-                style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#F8FAFC",fontSize:12,outline:"none"}}/>
-              <button onClick={addTeamMember} style={{padding:"8px 16px",borderRadius:8,background:"#6366F1",color:"#fff",border:"none",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Add Member</button>
+            
+            <div style={{background:"#0F172A",borderRadius:10,padding:12,marginBottom:14,border:"1px solid #334155"}}>
+              <div style={{fontSize:11,color:"#94A3B8",marginBottom:10,fontWeight:600}}>✨ ADD NEW TEAM MEMBER</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:8,alignItems:"flex-end"}}>
+                <div>
+                  <label style={{display:"block",fontSize:10,color:"#64748B",marginBottom:4}}>Name</label>
+                  <input type="text" placeholder="Username" value={newTeamMemberName} onChange={e=>setNewTeamMemberName(e.target.value)} onKeyDown={e=>e.key==="Enter" && addTeamMember()}
+                    style={{width:"100%",padding:"7px 10px",borderRadius:6,border:"1px solid #334155",background:"#1E293B",color:"#F8FAFC",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <div>
+                  <label style={{display:"block",fontSize:10,color:"#64748B",marginBottom:4}}>Password</label>
+                  <input type="password" placeholder="Set password" value={newTeamMemberPassword} onChange={e=>setNewTeamMemberPassword(e.target.value)} onKeyDown={e=>e.key==="Enter" && addTeamMember()}
+                    style={{width:"100%",padding:"7px 10px",borderRadius:6,border:"1px solid #334155",background:"#1E293B",color:"#F8FAFC",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <button onClick={addTeamMember} disabled={!newTeamMemberName.trim() || !newTeamMemberPassword.trim()} style={{padding:"7px 14px",borderRadius:6,background:(!newTeamMemberName.trim() || !newTeamMemberPassword.trim())?"#334155":"#6366F1",color:"#fff",border:"none",fontSize:11,fontWeight:600,cursor:(!newTeamMemberName.trim() || !newTeamMemberPassword.trim())?"not-allowed":"pointer",transition:"background 0.2s"}}>Add Member</button>
+              </div>
             </div>
+
             {teamMembers.length === 0 ? (
-              <p style={{color:"#64748B",fontSize:12,margin:"10px 0"}}>No team members added yet. Add one above to get started!</p>
+              <p style={{color:"#64748B",fontSize:12,margin:"10px 0"}}>No team members added yet. Add members using the form above.</p>
             ) : (
-              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                {teamMembers.map(member => (
-                  <div key={member} style={{background:"#0F172A",border:"1px solid #334155",borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:12,color:"#E2E8F0"}}>{member}</span>
-                    <button onClick={()=>removeTeamMember(member)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:14,padding:0}}>✕</button>
-                  </div>
-                ))}
+              <div>
+                <div style={{fontSize:11,color:"#94A3B8",marginBottom:8,fontWeight:600}}>REGISTERED MEMBERS ({teamMembers.length})</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                  {teamMembers.map(member => (
+                    <div key={member} style={{background:"#0F172A",border:"1px solid #334155",borderRadius:8,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,fontSize:12}}>
+                      <div style={{flex:1}}>
+                        <div style={{color:"#E2E8F0",fontWeight:500}}>{member}</div>
+                        <div style={{color:"#64748B",fontSize:10}}>🔒 Password protected</div>
+                      </div>
+                      <button onClick={()=>removeTeamMember(member)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:14,padding:0,transition:"opacity 0.2s"}}>✕</button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* SECURITY SETTINGS */}
+        {isAdmin && (
+          <div className="fade-in" style={{background:"#1E293B",borderRadius:14,padding:18,marginBottom:20,border:"1px solid #334155"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <h3 style={{margin:0,fontSize:14,fontWeight:700}}>🔐 Security Settings</h3>
+            </div>
+            
+            <div style={{background:"#0F172A",borderRadius:10,padding:12,marginBottom:14,border:"1px solid #334155"}}>
+              <div style={{fontSize:11,color:"#EF4444",marginBottom:10,fontWeight:600}}>⚠️ CHANGE ADMIN PASSWORD</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,alignItems:"flex-end"}}>
+                <div>
+                  <label style={{display:"block",fontSize:10,color:"#64748B",marginBottom:4}}>New Admin Password</label>
+                  <input type="password" placeholder="Enter new admin password" value={newAdminPassword} onChange={e=>setNewAdminPassword(e.target.value)} onKeyDown={e=>e.key==="Enter" && updateAdminPassword()}
+                    style={{width:"100%",padding:"7px 10px",borderRadius:6,border:"1px solid #334155",background:"#1E293B",color:"#F8FAFC",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <button onClick={updateAdminPassword} disabled={!newAdminPassword.trim()} style={{padding:"7px 14px",borderRadius:6,background:!newAdminPassword.trim()?"#334155":"#EF4444",color:"#fff",border:"none",fontSize:11,fontWeight:600,cursor:!newAdminPassword.trim()?"not-allowed":"pointer",transition:"background 0.2s"}}>Update</button>
+              </div>
+              <div style={{fontSize:10,color:"#FCA5A5",marginTop:8}}>💡 Your current admin password is: <span style={{fontFamily:"'Space Mono',monospace",fontWeight:600}}>admin123</span></div>
+            </div>
           </div>
         )}
 
