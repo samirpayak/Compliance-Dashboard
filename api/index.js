@@ -14,43 +14,54 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// MongoDB Connection
+// MongoDB Connection with better error handling
 const MONGO_URI = process.env.MONGODB_URI || 'mongodb+srv://csjaykular_db_user:xrbbrSgVfRIWJLlE@cluster7.2jtwbga.mongodb.net/?appName=Cluster7';
+
+console.log('🔗 Attempting MongoDB connection...');
+console.log(`🌐 URI: ${MONGO_URI.substring(0, 30)}...`);
+
+let mongoConnected = false;
 
 mongoose.connect(MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
+  connectTimeoutMS: 10000,
+  serverSelectionTimeoutMS: 10000,
 }).then(async () => {
-  console.log('✅ MongoDB Connected');
+  mongoConnected = true;
+  console.log('✅ MongoDB Connected Successfully');
+  
   // Log database status
   try {
-    const taskCount = await mongoose.model('Task').countDocuments();
-    const memberCount = await mongoose.model('TeamMember').countDocuments();
+    const taskCount = await Task.countDocuments();
+    const memberCount = await TeamMember.countDocuments();
     console.log(`📊 Database Status: ${taskCount} tasks, ${memberCount} team members`);
   } catch (err) {
     console.error('⚠️ Could not count documents:', err.message);
   }
 }).catch(err => {
+  mongoConnected = false;
   console.error('❌ MongoDB Connection Error:', err.message);
-  process.exit(1);
+  console.error('❌ Database operations will fail until connection is restored');
 });
 
 // ─── SCHEMAS ───
 const TaskSchema = new mongoose.Schema({
-  id: String,
+  id: { type: String, unique: true, sparse: true },
   category: String,
   task: String,
   due: String,
   type: String,
   assignedTo: { type: String, default: 'all' },
+  updatedAt: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now }
 });
 
 const StatusSchema = new mongoose.Schema({
-  taskId: String,
+  taskId: { type: String, unique: true, sparse: true },
   status: String,
   updatedBy: String,
-  updatedAt: Date
+  updatedAt: { type: Date, default: Date.now }
 });
 
 const ActivityLogSchema = new mongoose.Schema({
@@ -58,17 +69,17 @@ const ActivityLogSchema = new mongoose.Schema({
   taskName: String,
   status: String,
   by: String,
-  at: Date
+  at: { type: Date, default: Date.now }
 });
 
 const TeamMemberSchema = new mongoose.Schema({
-  username: { type: String, unique: true },
+  username: { type: String, unique: true, sparse: true },
   passwordHash: String,
   createdAt: { type: Date, default: Date.now }
 });
 
 const AdminSchema = new mongoose.Schema({
-  key: { type: String, default: 'admin', unique: true },
+  key: { type: String, default: 'admin', unique: true, sparse: true },
   passwordHash: String,
   updatedAt: { type: Date, default: Date.now }
 });
@@ -80,10 +91,22 @@ const ActivityLog = mongoose.model('ActivityLog', ActivityLogSchema);
 const TeamMember = mongoose.model('TeamMember', TeamMemberSchema);
 const Admin = mongoose.model('Admin', AdminSchema);
 
+// Middleware to check MongoDB connection
+const checkMongoConnection = (req, res, next) => {
+  if (!mongoConnected) {
+    console.warn('⚠️ Request received but MongoDB not connected');
+    return res.status(503).json({ 
+      error: 'Database not connected. Please try again in a moment.',
+      status: 'no-db'
+    });
+  }
+  next();
+};
+
 // ─── API ROUTES ───
 
 // Get all data (for initial load)
-app.get('/api/data', async (req, res) => {
+app.get('/api/data', checkMongoConnection, async (req, res) => {
   try {
     const tasks = await Task.find().lean();
     const statuses = await Status.find().lean();
@@ -116,7 +139,7 @@ app.get('/api/data', async (req, res) => {
 });
 
 // Add task
-app.post('/api/tasks', async (req, res) => {
+app.post('/api/tasks', checkMongoConnection, async (req, res) => {
   try {
     const taskData = req.body;
     
@@ -151,34 +174,66 @@ app.get('/api/tasks', async (req, res) => {
 });
 
 // Update task assignment
-app.patch('/api/tasks/:id/assign', async (req, res) => {
+app.patch('/api/tasks/:id/assign', checkMongoConnection, async (req, res) => {
   try {
     const taskId = req.params.id;
     const { assignedTo } = req.body;
     
     if (!assignedTo) {
+      console.warn(`⚠️ Missing assignedTo for task ${taskId}`);
       return res.status(400).json({ error: 'assignedTo is required' });
     }
     
-    console.log(`📝 Updating task ${taskId} assignment to ${assignedTo}`);
+    console.log(`\n📝 ═══════════════════════════════════════`);
+    console.log(`📋 Assignment Request: taskId=${taskId}, assignedTo=${assignedTo}`);
+    console.log(`🔍 Querying MongoDB for task with id="${taskId}"`);
+    
+    // First, check if task exists
+    const taskExists = await Task.findOne({ id: taskId });
+    if (!taskExists) {
+      console.warn(`❌ Task "${taskId}" NOT FOUND! Checking available IDs...`);
+      const allIds = await Task.find().select('id').limit(10);
+      console.warn(`📌 Sample task IDs in DB: ${allIds.map(t => t.id).join(', ')}`);
+      return res.status(404).json({ 
+        error: `Task not found: ${taskId}`,
+        available: allIds.map(t => t.id)
+      });
+    }
+    
+    console.log(`✓ Task exists, updating assignment...`);
     
     // Find and update the task
     const task = await Task.findOneAndUpdate(
       { id: taskId },
-      { assignedTo: assignedTo, updatedAt: new Date() },
+      { 
+        assignedTo: assignedTo, 
+        updatedAt: new Date() 
+      },
       { new: true }
     );
     
     if (!task) {
-      console.error(`❌ Task ${taskId} not found in MongoDB`);
-      return res.status(404).json({ error: `Task ${taskId} not found` });
+      console.error(`❌ findOneAndUpdate returned null for task ${taskId}`);
+      return res.status(500).json({ error: 'Update query failed' });
     }
     
-    console.log(`✅ Task ${taskId} assigned to ${assignedTo}`);
+    // Verify the update worked
+    if (task.assignedTo !== assignedTo) {
+      console.error(`❌ Update verification failed: expected ${assignedTo}, got ${task.assignedTo}`);
+      return res.status(500).json({ error: 'Assignment verification failed' });
+    }
+    
+    console.log(`✅ SUCCESS! Task ${taskId} → ${assignedTo}`);
+    console.log(`═══════════════════════════════════════\n`);
     res.json(task);
   } catch (err) {
-    console.error('❌ Assignment update error:', err);
-    res.status(500).json({ error: err.message });
+    console.error(`❌ Assignment error: ${err.message}`);
+    console.error(err.stack);
+    res.status(500).json({ 
+      error: 'Assignment failed',
+      message: err.message,
+      type: err.name
+    });
   }
 });
 
