@@ -22,30 +22,7 @@ console.log(`🌐 URI: ${MONGO_URI.substring(0, 30)}...`);
 
 let mongoConnected = false;
 
-mongoose.connect(MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  connectTimeoutMS: 10000,
-  serverSelectionTimeoutMS: 10000,
-}).then(async () => {
-  mongoConnected = true;
-  console.log('✅ MongoDB Connected Successfully');
-  
-  // Log database status
-  try {
-    const taskCount = await Task.countDocuments();
-    const memberCount = await TeamMember.countDocuments();
-    console.log(`📊 Database Status: ${taskCount} tasks, ${memberCount} team members`);
-  } catch (err) {
-    console.error('⚠️ Could not count documents:', err.message);
-  }
-}).catch(err => {
-  mongoConnected = false;
-  console.error('❌ MongoDB Connection Error:', err.message);
-  console.error('❌ Database operations will fail until connection is restored');
-});
-
-// ─── SCHEMAS ───
+// ─── SCHEMAS (MUST BE DEFINED BEFORE CONNECTION) ───
 const TaskSchema = new mongoose.Schema({
   id: { type: String, unique: true, sparse: true },
   category: String,
@@ -84,12 +61,53 @@ const AdminSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Models
+// Models (DEFINE BEFORE USING IN CONNECTION CALLBACK)
 const Task = mongoose.model('Task', TaskSchema);
 const Status = mongoose.model('Status', StatusSchema);
 const ActivityLog = mongoose.model('ActivityLog', ActivityLogSchema);
 const TeamMember = mongoose.model('TeamMember', TeamMemberSchema);
 const Admin = mongoose.model('Admin', AdminSchema);
+
+// Default tasks data
+const DEFAULT_TASKS = [
+  {id:"pms-1",category:"PMS",task:"Disclosure of Investor Charter & Investor Complaints by Portfolio Managers on their websites",due:"07.04.2026",type:"fixed",assignedTo:"all"},
+  {id:"pms-2",category:"PMS",task:"Monthly Report Submission to SEBI & APMI (within 7 working days)",due:"10.04.2026",type:"fixed",assignedTo:"all"},
+  {id:"pms-3",category:"PMS",task:"Submission of Quarterly Offsite Inspection Data to SEBI – Quarterly",due:"15.04.2026",type:"fixed",assignedTo:"all"},
+  {id:"pms-4",category:"PMS",task:"Self-Certification of Code of Conduct Compliance from Distributor of the Portfolio Manager",due:"15.04.2026",type:"fixed",assignedTo:"all"},
+  {id:"pms-5",category:"PMS",task:"Conduct Accessibility Audit for digital platforms as per SEBI Circular – Rights of Persons with Disabilities Act, 2016",due:"30.04.2026",type:"fixed",assignedTo:"all"},
+];
+
+// NOW connect to MongoDB with models already defined
+mongoose.connect(MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  connectTimeoutMS: 10000,
+  serverSelectionTimeoutMS: 10000,
+}).then(async () => {
+  mongoConnected = true;
+  console.log('✅ MongoDB Connected Successfully');
+  
+  // Initialize default tasks if database is empty
+  try {
+    const taskCount = await Task.countDocuments();
+    
+    if (taskCount === 0) {
+      console.log('📥 Database is empty, seeding default tasks...');
+      await Task.insertMany(DEFAULT_TASKS);
+      console.log(`✅ Seeded ${DEFAULT_TASKS.length} default tasks`);
+    }
+    
+    const memberCount = await TeamMember.countDocuments();
+    console.log(`📊 Database Status: ${taskCount} tasks, ${memberCount} team members`);
+  } catch (err) {
+    console.error('⚠️ Initialization error:', err.message);
+  }
+}).catch(err => {
+  mongoConnected = false;
+  console.error('❌ MongoDB Connection Error:', err.message);
+  console.error('❌ Check your connection string and MongoDB Atlas status');
+  process.exit(1);
+});
 
 // Middleware to check MongoDB connection
 const checkMongoConnection = (req, res, next) => {
@@ -108,7 +126,15 @@ const checkMongoConnection = (req, res, next) => {
 // Get all data (for initial load)
 app.get('/api/data', checkMongoConnection, async (req, res) => {
   try {
-    const tasks = await Task.find().lean();
+    let tasks = await Task.find().lean();
+    
+    // Auto-seed if no tasks exist
+    if (tasks.length === 0) {
+      console.log('📥 No tasks found in /api/data, auto-seeding...');
+      await Task.insertMany(DEFAULT_TASKS);
+      tasks = DEFAULT_TASKS;
+    }
+    
     const statuses = await Status.find().lean();
     const activityLog = await ActivityLog.find().sort({ at: -1 }).limit(200).lean();
     const teamMembers = await TeamMember.find({}, 'username -_id').lean();
@@ -380,32 +406,54 @@ app.post('/api/admin/login', async (req, res) => {
   }
 });
 
-// Health check
+// Health check with detailed diagnostics
 app.get('/api/health', async (req, res) => {
   try {
-    const mongoConnected = mongoose.connection.readyState === 1;
+    const connectionState = mongoose.connection.readyState;
+    const mongoConnected = connectionState === 1;
     
     let dbStats = {};
+    let connectionStatus = '';
+    
     if (mongoConnected) {
-      dbStats = {
-        tasks: await Task.countDocuments(),
-        teamMembers: await TeamMember.countDocuments(),
-        statuses: await Status.countDocuments(),
-        activityLogs: await ActivityLog.countDocuments()
-      };
+      connectionStatus = '✅ Connected';
+      try {
+        dbStats = {
+          tasks: await Task.countDocuments(),
+          teamMembers: await TeamMember.countDocuments(),
+          statuses: await Status.countDocuments(),
+          activityLogs: await ActivityLog.countDocuments()
+        };
+        
+        // Auto-seed if no tasks exist
+        if (dbStats.tasks === 0) {
+          console.log('⚙️ No tasks found, auto-seeding database...');
+          await Task.insertMany(DEFAULT_TASKS);
+          dbStats.tasks = DEFAULT_TASKS.length;
+          console.log('✅ Database auto-seeded');
+        }
+      } catch (err) {
+        dbStats.warning = 'Could not count documents: ' + err.message;
+      }
+    } else {
+      connectionStatus = `❌ Disconnected (state: ${connectionState})`;
+      dbStats.warning = 'MongoDB not connected. Check connection string and MongoDB Atlas status.';
     }
     
     res.json({ 
       status: mongoConnected ? 'healthy' : 'not-connected',
-      message: 'SEBI Compliance Dashboard API',
+      connectionStatus: connectionStatus,
       mongoDBConnected: mongoConnected,
+      connectionState: connectionState,
       database: dbStats,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      diagnostic: !mongoConnected ? 'Check: 1) MongoDB URI in env 2) IP Whitelist in MongoDB Atlas 3) Database password 4) Network connectivity' : null
     });
   } catch (err) {
     res.status(500).json({
       status: 'error',
       error: err.message,
+      connectionState: mongoose.connection.readyState,
       timestamp: new Date().toISOString()
     });
   }
