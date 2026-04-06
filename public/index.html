@@ -652,11 +652,12 @@ function App() {
           setTeamMembers(data.teamMembers || []);
           setUserCredentials(data.userCredentials || {});
           if (data.adminPassword) setAdminPassword(data.adminPassword);
-          console.log('✅ Loaded from MongoDB');
+          useAPI = true; // Enable API for all operations
+          console.log('✅ Loaded from MongoDB - API enabled');
           return;
         }
       } catch (err) {
-        console.log('⚠️ API unavailable, using localStorage');
+        console.log('⚠️ API unavailable, using localStorage only');
       }
       
       // Fallback to localStorage
