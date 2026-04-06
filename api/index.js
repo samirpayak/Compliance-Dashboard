@@ -243,11 +243,13 @@ app.get('/api/data', checkMongoConnection, async (req, res) => {
   try {
     let tasks = await Task.find().lean();
     
-    // Auto-seed if no tasks exist
-    if (tasks.length === 0) {
-      console.log('📥 No tasks found in /api/data, auto-seeding...');
+    // Auto-seed if no tasks exist OR if we have fewer than DEFAULT_TASKS
+    if (tasks.length === 0 || tasks.length < DEFAULT_TASKS.length) {
+      console.log(`📥 Found ${tasks.length} tasks, but ${DEFAULT_TASKS.length} expected. Re-seeding...`);
+      await Task.deleteMany({}); // Clear existing partial tasks
       await Task.insertMany(DEFAULT_TASKS);
       tasks = DEFAULT_TASKS;
+      console.log(`✅ Re-seeded with all ${DEFAULT_TASKS.length} tasks`);
     }
     
     const statuses = await Status.find().lean();
@@ -540,12 +542,13 @@ app.get('/api/health', async (req, res) => {
           activityLogs: await ActivityLog.countDocuments()
         };
         
-        // Auto-seed if no tasks exist
-        if (dbStats.tasks === 0) {
-          console.log('⚙️ No tasks found, auto-seeding database...');
+        // Auto-seed if no tasks exist OR if we have fewer than DEFAULT_TASKS
+        if (dbStats.tasks === 0 || dbStats.tasks < DEFAULT_TASKS.length) {
+          console.log(`⚙️ Database has ${dbStats.tasks} tasks, but ${DEFAULT_TASKS.length} expected. Re-seeding...`);
+          await Task.deleteMany({}); // Clear existing partial tasks
           await Task.insertMany(DEFAULT_TASKS);
           dbStats.tasks = DEFAULT_TASKS.length;
-          console.log('✅ Database auto-seeded');
+          console.log('✅ Database re-seeded with all tasks');
         }
       } catch (err) {
         dbStats.warning = 'Could not count documents: ' + err.message;
@@ -571,6 +574,42 @@ app.get('/api/health', async (req, res) => {
       connectionState: mongoose.connection.readyState,
       timestamp: new Date().toISOString()
     });
+  }
+});
+
+// Reset/Re-seed database with all tasks (admin endpoint)
+app.post('/api/admin/reset-tasks', async (req, res) => {
+  try {
+    if (!mongoConnected) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+    
+    const { adminPassword } = req.body;
+    
+    // Verify admin password
+    const admin = await Admin.findOne({ key: 'admin' });
+    if (!admin || admin.passwordHash !== adminPassword) {
+      return res.status(401).json({ error: 'Unauthorized. Invalid admin password.' });
+    }
+    
+    console.log('🔄 Re-seeding database with all tasks...');
+    
+    // Clear existing tasks
+    const deleted = await Task.deleteMany({});
+    console.log(`🗑️ Deleted ${deleted.deletedCount} existing tasks`);
+    
+    // Re-seed with all tasks
+    await Task.insertMany(DEFAULT_TASKS);
+    console.log(`✅ Seeded ${DEFAULT_TASKS.length} tasks`);
+    
+    res.json({ 
+      success: true, 
+      message: `Database reset: ${DEFAULT_TASKS.length} tasks re-seeded`,
+      taskCount: DEFAULT_TASKS.length
+    });
+  } catch (err) {
+    console.error('❌ Reset error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
