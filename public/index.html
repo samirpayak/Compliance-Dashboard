@@ -337,17 +337,7 @@ function App() {
   const [activityLog, setActivityLog] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [userCredentials, setUserCredentials] = useState({}); // {username: hashedPassword}
-  const [adminPassword, setAdminPassword] = useState(() => {
-    // Initialize with hashed "admin123"
-    let hash = 0;
-    const pwd = "admin123";
-    for (let i = 0; i < pwd.length; i++) {
-      const char = pwd.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(16);
-  });
+  const [adminPassword, setAdminPassword] = useState("dcb8ad9eb8b"); // Default hash for "admin123"
   const [selectedCat, setSelectedCat] = useState("All");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
