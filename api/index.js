@@ -20,10 +20,19 @@ const MONGO_URI = process.env.MONGODB_URI || 'mongodb+srv://csjaykular_db_user:x
 mongoose.connect(MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-}).then(() => {
+}).then(async () => {
   console.log('✅ MongoDB Connected');
+  // Log database status
+  try {
+    const taskCount = await mongoose.model('Task').countDocuments();
+    const memberCount = await mongoose.model('TeamMember').countDocuments();
+    console.log(`📊 Database Status: ${taskCount} tasks, ${memberCount} team members`);
+  } catch (err) {
+    console.error('⚠️ Could not count documents:', err.message);
+  }
 }).catch(err => {
   console.error('❌ MongoDB Connection Error:', err.message);
+  process.exit(1);
 });
 
 // ─── SCHEMAS ───
@@ -76,14 +85,22 @@ const Admin = mongoose.model('Admin', AdminSchema);
 // Get all data (for initial load)
 app.get('/api/data', async (req, res) => {
   try {
-    const tasks = await Task.find();
-    const statuses = await Status.find();
-    const activityLog = await ActivityLog.find().sort({ at: -1 }).limit(200);
-    const teamMembers = await TeamMember.find({}, 'username -_id');
+    const tasks = await Task.find().lean();
+    const statuses = await Status.find().lean();
+    const activityLog = await ActivityLog.find().sort({ at: -1 }).limit(200).lean();
+    const teamMembers = await TeamMember.find({}, 'username -_id').lean();
     
     // Get admin password hash
-    const admin = await Admin.findOne({ key: 'admin' });
-    const adminPassword = admin?.passwordHash || '39c43b7d'; // default hash for "admin123"
+    const admin = await Admin.findOne({ key: 'admin' }).lean();
+    const adminPassword = admin?.passwordHash || '39c43b7d';
+    
+    console.log(`📤 Returning ${tasks.length} tasks, ${teamMembers.length} team members`);
+    
+    // Check if any tasks have assignments
+    const assignedTasks = tasks.filter(t => t.assignedTo && t.assignedTo !== 'all').length;
+    if (assignedTasks > 0) {
+      console.log(`📌 ${assignedTasks} tasks have specific assignments`);
+    }
     
     res.json({
       tasks,
@@ -93,6 +110,7 @@ app.get('/api/data', async (req, res) => {
       adminPassword
     });
   } catch (err) {
+    console.error('❌ Error fetching data:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -100,10 +118,24 @@ app.get('/api/data', async (req, res) => {
 // Add task
 app.post('/api/tasks', async (req, res) => {
   try {
-    const task = new Task(req.body);
-    await task.save();
-    res.json(task);
+    const taskData = req.body;
+    
+    if (!taskData.id) {
+      return res.status(400).json({ error: 'Task id is required' });
+    }
+    
+    console.log(`📥 Adding task: ${taskData.id} - ${taskData.task}`);
+    
+    const task = new Task({
+      ...taskData,
+      createdAt: new Date()
+    });
+    
+    const saved = await task.save();
+    console.log(`✅ Task saved: ${saved.id}`);
+    res.json(saved);
   } catch (err) {
+    console.error('❌ Task creation error:', err);
     res.status(400).json({ error: err.message });
   }
 });
@@ -121,15 +153,32 @@ app.get('/api/tasks', async (req, res) => {
 // Update task assignment
 app.patch('/api/tasks/:id/assign', async (req, res) => {
   try {
+    const taskId = req.params.id;
     const { assignedTo } = req.body;
+    
+    if (!assignedTo) {
+      return res.status(400).json({ error: 'assignedTo is required' });
+    }
+    
+    console.log(`📝 Updating task ${taskId} assignment to ${assignedTo}`);
+    
+    // Find and update the task
     const task = await Task.findOneAndUpdate(
-      { id: req.params.id },
-      { assignedTo },
+      { id: taskId },
+      { assignedTo: assignedTo, updatedAt: new Date() },
       { new: true }
     );
+    
+    if (!task) {
+      console.error(`❌ Task ${taskId} not found in MongoDB`);
+      return res.status(404).json({ error: `Task ${taskId} not found` });
+    }
+    
+    console.log(`✅ Task ${taskId} assigned to ${assignedTo}`);
     res.json(task);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error('❌ Assignment update error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -277,14 +326,34 @@ app.post('/api/admin/login', async (req, res) => {
 });
 
 // Health check
-app.get('/api/health', (req, res) => {
-  const mongoConnected = mongoose.connection.readyState === 1;
-  res.json({ 
-    status: mongoConnected ? 'ok' : 'connecting',
-    message: 'SEBI Compliance Dashboard API',
-    mongoDBConnected: mongoConnected,
-    timestamp: new Date().toISOString()
-  });
+app.get('/api/health', async (req, res) => {
+  try {
+    const mongoConnected = mongoose.connection.readyState === 1;
+    
+    let dbStats = {};
+    if (mongoConnected) {
+      dbStats = {
+        tasks: await Task.countDocuments(),
+        teamMembers: await TeamMember.countDocuments(),
+        statuses: await Status.countDocuments(),
+        activityLogs: await ActivityLog.countDocuments()
+      };
+    }
+    
+    res.json({ 
+      status: mongoConnected ? 'healthy' : 'not-connected',
+      message: 'SEBI Compliance Dashboard API',
+      mongoDBConnected: mongoConnected,
+      database: dbStats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: 'error',
+      error: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Export for Vercel

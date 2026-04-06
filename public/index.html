@@ -682,25 +682,44 @@ function App() {
     const nt = tasks.map(t => t.id === tid ? {...t, assignedTo: newAssignedTo} : t);
     setTasks(nt);
     
-    // Try to update in MongoDB
+    // Try to update in MongoDB (with retry)
     let mongoSuccess = false;
-    try {
-      const res = await fetch(window.location.origin + '/api/tasks/' + tid + '/assign', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignedTo: newAssignedTo }),
-        signal: AbortSignal.timeout(5000)
-      });
-      if (res.ok) {
-        const updatedTask = await res.json();
-        // Verify MongoDB saved the assignment
-        if (updatedTask.assignedTo === newAssignedTo) {
-          mongoSuccess = true;
-          console.log('✅ Task assigned to ' + newAssignedTo + ' in MongoDB');
+    let retries = 2;
+    
+    while (retries > 0 && !mongoSuccess) {
+      try {
+        console.log(`📤 Assigning task ${tid} to ${newAssignedTo} (attempt ${3-retries}/2)`);
+        const res = await fetch(window.location.origin + '/api/tasks/' + tid + '/assign', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignedTo: newAssignedTo }),
+          signal: AbortSignal.timeout(5000)
+        });
+        
+        if (res.ok) {
+          const updatedTask = await res.json();
+          // Verify MongoDB saved the assignment
+          if (updatedTask && updatedTask.assignedTo === newAssignedTo) {
+            mongoSuccess = true;
+            console.log('✅ Task assigned to ' + newAssignedTo + ' in MongoDB');
+          } else {
+            console.error('❌ MongoDB returned invalid task data:', updatedTask);
+          }
+        } else {
+          const errorData = await res.json().catch(() => ({}));
+          console.error(`❌ Assignment failed (${res.status}):`, errorData.error || res.statusText);
+        }
+      } catch (err) {
+        console.error('⚠️ Assignment attempt failed:', err.message);
+      }
+      
+      if (!mongoSuccess) {
+        retries--;
+        if (retries > 0) {
+          console.log(`⏳ Retrying assignment (${retries} attempts left)...`);
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
         }
       }
-    } catch (err) {
-      console.log('⚠️ MongoDB assignment failed: ' + err.message);
     }
     
     // Update activity log
@@ -718,7 +737,7 @@ function App() {
     if (mongoSuccess) {
       alert("✅ Task assigned to " + newAssignedTo + "! Assignment saved to database.");
     } else {
-      alert("⚠️ Task assigned locally, but database sync may have failed. Try again if not visible on refresh.");
+      alert("⚠️ Assignment saved locally, but MongoDB sync failed. Your MongoDB connection may be down. Check database status.");
     }
   };
 
